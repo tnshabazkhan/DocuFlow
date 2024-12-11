@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net8.0</TargetFramework>
+    <AzureFunctionsVersion>v4</AzureFunctionsVersion>
+    <OutputType>Exe</OutputType>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>DocuFlow.Functions</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Azure.AI.DocumentIntelligence" Version="1.0.0-beta.2" />
+    <PackageReference Include="Microsoft.Azure.Cosmos" Version="3.60.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker" Version="2.0.7" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.ServiceBus" Version="5.22.0" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Extensions.Storage.Blobs" Version="6.8.1" />
+    <PackageReference Include="Microsoft.Azure.Functions.Worker.Sdk" Version="2.0.7" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="8.0.0" />
+    <PackageReference Include="Newtonsoft.Json" Version="13.0.4" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\DocuFlow.Application\DocuFlow.Application.csproj" />
+    <ProjectReference Include="..\DocuFlow.Infrastructure\DocuFlow.Infrastructure.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="host.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="local.settings.json">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <CopyToPublishDirectory>Never</CopyToPublishDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

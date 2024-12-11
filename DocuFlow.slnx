@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="DocuFlow.Api/DocuFlow.Api.csproj" />
+  <Project Path="DocuFlow.Application/DocuFlow.Application.csproj" />
+  <Project Path="DocuFlow.Domain/DocuFlow.Domain.csproj" />
+  <Project Path="DocuFlow.Functions/DocuFlow.Functions.csproj" />
+  <Project Path="DocuFlow.Infrastructure/DocuFlow.Infrastructure.csproj" />
+</Solution>

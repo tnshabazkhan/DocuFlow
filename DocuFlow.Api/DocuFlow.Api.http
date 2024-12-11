@@ -1,0 +1,6 @@
+@DocuFlow.Api_HostAddress = http://localhost:5009
+
+GET {{DocuFlow.Api_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###
