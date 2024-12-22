@@ -8,9 +8,20 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Enable CORS
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll", policy =>
+    {
+        policy.AllowAnyOrigin()
+              .AllowAnyMethod()
+              .AllowAnyHeader();
+    });
+});
+
 // Use Newtonsoft.Json for Minimal APIs to align with Cosmos SDK
 builder.Services.ConfigureHttpJsonOptions(options => {
-    options.SerializerOptions.PropertyNamingPolicy = null; // Optional: keep PascalCase if desired
+    options.SerializerOptions.PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase;
 });
 builder.Services.AddControllers().AddNewtonsoftJson(); 
 // Note: For Minimal APIs, we also need to configure the JSON options specifically
@@ -34,6 +45,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors("AllowAll");
 
 // Map Minimal API Endpoints
 app.MapDocumentEndpoints();

@@ -2,6 +2,7 @@ using Microsoft.Azure.Cosmos;
 using DocuFlow.Application.Interfaces;
 using DocuFlow.Domain.Entities;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Azure.Cosmos.Linq;
 
 namespace DocuFlow.Infrastructure.Persistence;
 
@@ -15,7 +16,6 @@ public class CosmosDocumentRepository : IDocumentRepository
         var databaseName = configuration["CosmosDb:DatabaseName"] ?? "DocuFlowDb";
         var containerName = configuration["CosmosDb:ContainerName"] ?? "Documents";
 
-        // For local dev, ensure you have the Cosmos Emulator or a real string
         var client = new CosmosClient(connectionString);
         _container = client.GetContainer(databaseName, containerName);
     }
@@ -40,6 +40,26 @@ public class CosmosDocumentRepository : IDocumentRepository
         {
             return null;
         }
+    }
+
+    public async Task<IEnumerable<Document>> GetByTenantIdAsync(string tenantId, CancellationToken cancellationToken)
+    {
+        var queryable = _container.GetItemLinqQueryable<Document>(
+            requestOptions: new QueryRequestOptions { PartitionKey = new PartitionKey(tenantId) });
+
+        var iterator = queryable
+            .Where(d => d.TenantId == tenantId)
+            .OrderByDescending(d => d.UploadDate)
+            .ToFeedIterator();
+
+        var results = new List<Document>();
+        while (iterator.HasMoreResults)
+        {
+            var response = await iterator.ReadNextAsync(cancellationToken);
+            results.AddRange(response);
+        }
+
+        return results;
     }
 
     public async Task UpdateAsync(Document document, CancellationToken cancellationToken)

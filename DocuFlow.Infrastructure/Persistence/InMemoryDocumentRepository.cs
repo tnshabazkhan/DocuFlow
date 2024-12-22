@@ -4,10 +4,6 @@ using DocuFlow.Domain.Entities;
 
 namespace DocuFlow.Infrastructure.Persistence;
 
-/// <summary>
-/// A temporary in-memory repository to allow rapid API development.
-/// We will swap this out for Cosmos DB once the async queue is built.
-/// </summary>
 public class InMemoryDocumentRepository : IDocumentRepository
 {
     private readonly ConcurrentDictionary<Guid, Document> _documents = new();
@@ -25,6 +21,12 @@ public class InMemoryDocumentRepository : IDocumentRepository
             return Task.FromResult<Document?>(document);
         }
         return Task.FromResult<Document?>(null);
+    }
+
+    public Task<IEnumerable<Document>> GetByTenantIdAsync(string tenantId, CancellationToken cancellationToken)
+    {
+        var docs = _documents.Values.Where(d => d.TenantId == tenantId).OrderByDescending(d => d.UploadDate);
+        return Task.FromResult<IEnumerable<Document>>(docs);
     }
 
     public Task UpdateAsync(Document document, CancellationToken cancellationToken)

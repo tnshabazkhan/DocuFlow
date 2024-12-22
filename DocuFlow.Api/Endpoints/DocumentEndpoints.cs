@@ -16,7 +16,6 @@ public static class DocumentEndpoints
         {
             var tenantId = "tenant-123"; 
 
-            // Pass the category from the UI request
             var command = new InitiateDocumentUploadCommand(tenantId, request.FileName, request.Category);
             var response = await mediatR.Send(command, cancellationToken);
 
@@ -43,6 +42,26 @@ public static class DocumentEndpoints
             return document is not null ? Results.Ok(document) : Results.NotFound();
         })
         .WithName("GetDocument");
+
+        group.MapGet("/", async (IMediator mediatR, CancellationToken cancellationToken) =>
+        {
+            var tenantId = "tenant-123";
+            var query = new GetDocumentsQuery(tenantId);
+            var documents = await mediatR.Send(query, cancellationToken);
+
+            return Results.Ok(documents);
+        })
+        .WithName("GetDocuments");
+
+        group.MapGet("/{id}/content-url", async (Guid id, IMediator mediatR, CancellationToken cancellationToken) =>
+        {
+            var tenantId = "tenant-123";
+            var query = new GetDocumentContentUrlQuery(id, tenantId);
+            var url = await mediatR.Send(query, cancellationToken);
+
+            return url is not null ? Results.Ok(new { url }) : Results.NotFound();
+        })
+        .WithName("GetDocumentContentUrl");
     }
 }
 

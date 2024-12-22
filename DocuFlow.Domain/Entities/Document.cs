@@ -14,11 +14,14 @@ public class Document
     
     public string FileName { get; set; } = string.Empty;
     
+    // Original uploaded file path
     public string BlobUri { get; set; } = string.Empty;
     
+    // Path to the side-car text file for large documents
+    public string? ExtractedTextUri { get; set; }
+
     public DocumentStatus Status { get; set; } = DocumentStatus.Uploaded;
 
-    // Added Category to track which AI model to use
     public DocumentCategory Category { get; set; } = DocumentCategory.General;
     
     public DateTimeOffset UploadDate { get; set; } = DateTimeOffset.UtcNow;
@@ -26,6 +29,8 @@ public class Document
     public string? DocumentType { get; set; } 
     
     public double? ConfidenceScore { get; set; }
+
+    public string? Summary { get; set; }
     
     public Dictionary<string, object?>? ExtractedData { get; set; }
 }
