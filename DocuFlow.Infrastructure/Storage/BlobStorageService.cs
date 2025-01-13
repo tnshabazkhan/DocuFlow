@@ -1,6 +1,7 @@
 using Azure.Storage.Blobs;
 using Azure.Storage.Sas;
 using Azure.Storage.Blobs.Models;
+using Azure.Storage;
 using DocuFlow.Application.Interfaces;
 using Microsoft.Extensions.Configuration;
 using System.Text;
@@ -28,6 +29,10 @@ public class BlobStorageService : IStorageService
     {
         var blobClient = GetBlobClient(blobName);
         
+        // Ensure container exists before giving a SAS for a blob inside it
+        var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
+        await containerClient.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
+
         var sasBuilder = new BlobSasBuilder
         {
             BlobContainerName = _containerName,
@@ -37,14 +42,20 @@ public class BlobStorageService : IStorageService
             ExpiresOn = DateTimeOffset.UtcNow.AddHours(1)
         };
 
-        sasBuilder.SetPermissions(BlobSasPermissions.Write | BlobSasPermissions.Create);
+        // Standard permissions for Block Blob upload
+        sasBuilder.SetPermissions(BlobSasPermissions.Read | BlobSasPermissions.Write | BlobSasPermissions.Create | BlobSasPermissions.Add);
 
+        // This is the most reliable way to generate the URI when using a connection string
         return blobClient.GenerateSasUri(sasBuilder).ToString();
     }
 
     public async Task<string> GenerateReadSasUriAsync(string blobName, CancellationToken cancellationToken)
     {
-        string container = blobName.StartsWith("extracted/") ? _extractedContainerName : _containerName;
+        // Check if the blob starts with "extracted/" or "summaries/" to determine the container
+        string container = (blobName.StartsWith("extracted/") || blobName.StartsWith("summaries/")) 
+            ? _extractedContainerName 
+            : _containerName;
+            
         var containerClient = _blobServiceClient.GetBlobContainerClient(container);
         var blobClient = containerClient.GetBlobClient(blobName);
         
@@ -64,12 +75,17 @@ public class BlobStorageService : IStorageService
 
     public async Task<string> UploadContentAsync(string blobName, string content, string contentType, CancellationToken cancellationToken)
     {
+        return await UploadBytesAsync(blobName, Encoding.UTF8.GetBytes(content), contentType, cancellationToken);
+    }
+
+    public async Task<string> UploadBytesAsync(string blobName, byte[] data, string contentType, CancellationToken cancellationToken)
+    {
         var containerClient = _blobServiceClient.GetBlobContainerClient(_extractedContainerName);
         await containerClient.CreateIfNotExistsAsync(cancellationToken: cancellationToken);
 
         var blobClient = containerClient.GetBlobClient(blobName);
         
-        using var stream = new MemoryStream(Encoding.UTF8.GetBytes(content));
+        using var stream = new MemoryStream(data);
         await blobClient.UploadAsync(stream, new BlobHttpHeaders { ContentType = contentType }, cancellationToken: cancellationToken);
 
         return blobName;

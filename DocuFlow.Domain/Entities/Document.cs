@@ -20,6 +20,9 @@ public class Document
     // Path to the side-car text file for large documents
     public string? ExtractedTextUri { get; set; }
 
+    // Path to the generated PDF summary report
+    public string? SummaryPdfUri { get; set; }
+
     public DocumentStatus Status { get; set; } = DocumentStatus.Uploaded;
 
     public DocumentCategory Category { get; set; } = DocumentCategory.General;
