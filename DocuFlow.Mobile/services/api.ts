@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { Platform } from 'react-native';
 
-const API_BASE_URL = Platform.OS === 'android' ? 'http://10.0.2.2:5009/api' : 'http://localhost:5009/api';
+const API_BASE_URL = 'http://10.88.21.81:5009/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -9,27 +9,49 @@ const api = axios.create({
 
 export const uploadDocument = async (file: any, category: number) => {
   try {
+    // Step 1: Initiate
+    console.log(`[DocuFlow] Initiating upload for: ${file.name}`);
     const initiateResponse = await api.post('/documents', {
       fileName: file.name || `mobile_upload_${Date.now()}.jpg`,
       category: category
     });
     
     const { documentId, sasUri } = initiateResponse.data;
+    console.log(`[DocuFlow] Received DocumentId: ${documentId}`);
 
-    const fileContent = await fetch(file.uri).then(res => res.blob());
+    // Step 2: Direct Upload to Blob Storage
+    console.log(`[DocuFlow] Uploading binary content to Azure Blob Storage...`);
     
-    await axios.put(sasUri, fileContent, {
+    // Using fetch for the PUT request is often more reliable for raw binary data in React Native/Expo
+    const blobResponse = await fetch(file.uri);
+    const blob = await blobResponse.blob();
+    
+    console.log(`[DocuFlow] Blob size to upload: ${blob.size} bytes`);
+
+    const uploadResponse = await fetch(sasUri, {
+      method: 'PUT',
+      body: blob,
       headers: {
         'x-ms-blob-type': 'BlockBlob',
         'Content-Type': file.mimeType || 'application/octet-stream',
-      }
+      },
     });
 
+    if (!uploadResponse.ok) {
+        const errorText = await uploadResponse.text();
+        console.error(`[DocuFlow] Azure Storage upload failed: ${uploadResponse.status} ${uploadResponse.statusText}`, errorText);
+        throw new Error(`Azure Storage upload failed with status ${uploadResponse.status}`);
+    }
+
+    console.log(`[DocuFlow] Upload successful.`);
+
+    // Step 3: Complete
     await api.post(`/documents/${documentId}/complete`);
+    console.log(`[DocuFlow] Processing notification sent.`);
 
     return documentId;
   } catch (error) {
-    console.error('Upload flow failed:', error);
+    console.error('[DocuFlow] Upload flow failed:', error);
     throw error;
   }
 };
@@ -46,6 +68,11 @@ export const getDocument = async (id: string) => {
 
 export const getDocumentContentUrl = async (id: string) => {
     const response = await api.get(`/documents/${id}/content-url`);
+    return response.data.url;
+};
+
+export const getSummaryPdfUrl = async (id: string) => {
+    const response = await api.get(`/documents/${id}/summary-url`);
     return response.data.url;
 };
 

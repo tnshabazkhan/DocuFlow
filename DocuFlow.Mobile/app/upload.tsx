@@ -6,43 +6,55 @@ import * as ImagePicker from 'expo-image-picker';
 import { uploadDocument } from '../services/api';
 
 const CATEGORIES = [
-  { label: 'General / Layout', value: 0 },
-  { label: 'Invoice', value: 1 },
-  { label: 'Receipt', value: 2 },
+  { label: 'Smart Summary (AI)', value: 5 },
+  { label: 'Invoice / Receipt', value: 1 },
   { label: 'Identity Card', value: 3 },
-  { label: 'Text Extraction (OCR)', value: 4 },
-  { label: 'Smart Summary', value: 5 },
+  { label: 'Analyze Structure', value: 0 },
+  { label: 'Plain Text (OCR)', value: 4 },
 ];
 
-export default function UploadScreen() {
+const UploadScreen = () => {
   const router = useRouter();
-  const [selectedCategory, setSelectedCategory] = useState(0);
+  const [selectedCategory, setSelectedCategory] = useState(5); // Default to Smart Summary
   const [file, setFile] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  const pickDocument = async () => {
-    const result = await DocumentPicker.getDocumentAsync({
-      type: ['application/pdf', 'image/*'],
-    });
+  // Use the modern hook approach if possible, or fallback to manual request
+  const [permissionResponse, requestPermission] = ImagePicker.useCameraPermissions();
 
-    if (!result.canceled) {
-      setFile(result.assets[0]);
+  const pickDocument = async () => {
+    try {
+        const result = await DocumentPicker.getDocumentAsync({
+          type: ['application/pdf', 'image/*'],
+        });
+
+        if (!result.canceled) {
+          setFile(result.assets[0]);
+        }
+    } catch (err) {
+        console.error("Document picking error:", err);
     }
   };
 
   const takePhoto = async () => {
-    const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permission needed', 'We need camera access to take photos of documents.');
-      return;
-    }
+    try {
+        if (!permissionResponse?.granted) {
+            const permission = await requestPermission();
+            if (!permission.granted) {
+                Alert.alert('Permission needed', 'We need camera access to take photos of documents.');
+                return;
+            }
+        }
 
-    const result = await ImagePicker.launchCameraAsync({
-      quality: 0.8,
-    });
+        const result = await ImagePicker.launchCameraAsync({
+          quality: 0.8,
+        });
 
-    if (!result.canceled) {
-      setFile(result.assets[0]);
+        if (!result.canceled) {
+          setFile(result.assets[0]);
+        }
+    } catch (err) {
+        console.error("Camera error:", err);
     }
   };
 
@@ -113,7 +125,9 @@ export default function UploadScreen() {
       </TouchableOpacity>
     </View>
   );
-}
+};
+
+export default UploadScreen;
 
 const styles = StyleSheet.create({
   container: {

@@ -11,14 +11,12 @@ export default function RootLayout() {
           name="index" 
           options={{ 
             title: 'DocuFlow',
-            headerLargeTitle: true,
           }} 
         />
         <Stack.Screen 
           name="upload" 
           options={{ 
             title: 'Upload Document',
-            presentation: 'modal',
           }} 
         />
         <Stack.Screen 

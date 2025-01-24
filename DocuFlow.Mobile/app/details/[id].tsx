@@ -1,7 +1,7 @@
 import { StyleSheet, Text, View, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Alert } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
-import { getDocument, getDocumentContentUrl } from '../../services/api';
+import { getDocument, getDocumentContentUrl, getSummaryPdfUrl } from '../../services/api';
 import { useState } from 'react';
 import * as Linking from 'expo-linking';
 
@@ -9,6 +9,7 @@ export default function DetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [refreshing, setRefreshing] = useState(false);
   const [isOpeningContent, setIsOpeningContent] = useState(false);
+  const [isOpeningPdf, setIsOpeningPdf] = useState(false);
 
   const { data: document, isLoading, error, refetch } = useQuery({
     queryKey: ['document', id],
@@ -38,6 +39,23 @@ export default function DetailsScreen() {
         console.error(err);
     } finally {
         setIsOpeningContent(false);
+    }
+  };
+
+  const handleDownloadPdf = async () => {
+    setIsOpeningPdf(true);
+    try {
+        const url = await getSummaryPdfUrl(id);
+        if (url) {
+            await Linking.openURL(url);
+        } else {
+            Alert.alert('Error', 'PDF Report URL could not be generated.');
+        }
+    } catch (err) {
+        Alert.alert('Error', 'Failed to retrieve PDF report.');
+        console.error(err);
+    } finally {
+        setIsOpeningPdf(false);
     }
   };
 
@@ -78,7 +96,22 @@ export default function DetailsScreen() {
 
       {document.summary && (
         <View style={styles.summarySection}>
-          <Text style={styles.sectionTitle}>Smart Summary</Text>
+          <View style={styles.summaryHeader}>
+            <Text style={styles.sectionTitle}>Smart Summary</Text>
+            {document.summaryPdfUri && (
+                <TouchableOpacity 
+                    style={styles.pdfButton} 
+                    onPress={handleDownloadPdf}
+                    disabled={isOpeningPdf}
+                >
+                    {isOpeningPdf ? (
+                        <ActivityIndicator size="small" color="#fff" />
+                    ) : (
+                        <Text style={styles.pdfButtonText}>Download PDF</Text>
+                    )}
+                </TouchableOpacity>
+            )}
+          </View>
           <Text style={styles.summaryText}>{document.summary}</Text>
         </View>
       )}
@@ -193,10 +226,27 @@ const styles = StyleSheet.create({
     borderLeftWidth: 4,
     borderLeftColor: '#007bff',
   },
+  summaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
   summaryText: {
     fontSize: 15,
     lineHeight: 22,
     color: '#333',
+  },
+  pdfButton: {
+    backgroundColor: '#007bff',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+  },
+  pdfButtonText: {
+    color: '#fff',
+    fontSize: 12,
+    fontWeight: '700',
   },
   section: {
     marginTop: 16,
@@ -206,7 +256,6 @@ const styles = StyleSheet.create({
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
-    marginBottom: 16,
     color: '#333',
   },
   infoRow: {
