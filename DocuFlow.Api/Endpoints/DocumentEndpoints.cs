@@ -62,6 +62,16 @@ public static class DocumentEndpoints
             return url is not null ? Results.Ok(new { url }) : Results.NotFound();
         })
         .WithName("GetDocumentContentUrl");
+
+        group.MapGet("/{id}/summary-url", async (Guid id, IMediator mediatR, CancellationToken cancellationToken) =>
+        {
+            var tenantId = "tenant-123";
+            var query = new GetSummaryPdfUrlQuery(id, tenantId);
+            var url = await mediatR.Send(query, cancellationToken);
+
+            return url is not null ? Results.Ok(new { url }) : Results.NotFound();
+        })
+        .WithName("GetSummaryPdfUrl");
     }
 }
 
