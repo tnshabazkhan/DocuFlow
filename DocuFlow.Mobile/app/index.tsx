@@ -1,58 +1,127 @@
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator, Animated } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useQuery } from '@tanstack/react-query';
 import { getDocuments } from '../services/api';
+import { Colors } from '../constants/Colors';
+import { Ionicons } from '@expo/vector-icons';
+import { useEffect, useRef } from 'react';
+
+function FadeInItem({ children, index }: { children: React.ReactNode, index: number }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 500,
+        delay: index * 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 500,
+        delay: index * 100,
+        useNativeDriver: true,
+      })
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      {children}
+    </Animated.View>
+  );
+}
 
 export default function HomeScreen() {
   const router = useRouter();
+  const headerFadeAnim = useRef(new Animated.Value(0)).current;
+  const headerSlideAnim = useRef(new Animated.Value(-20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(headerFadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(headerSlideAnim, {
+        toValue: 0,
+        duration: 800,
+        useNativeDriver: true,
+      })
+    ]).start();
+  }, []);
 
   const { data: documents, isLoading, error, refetch } = useQuery({
     queryKey: ['documents'],
     queryFn: getDocuments,
-    refetchInterval: 10000, // Refresh list every 10 seconds
+    refetchInterval: 10000,
   });
 
-  const getStatusText = (status: number) => {
+  const getStatusInfo = (status: number) => {
     switch (status) {
-      case 0: return 'Uploaded';
-      case 1: return 'Processing...';
-      case 2: return 'Processed';
-      case 3: return 'Failed';
-      default: return 'Unknown';
+      case 2: return { text: 'Processed', color: Colors.success, icon: 'checkmark-circle' as const };
+      case 1: return { text: 'Analyzing...', color: Colors.warning, icon: 'sync' as const };
+      case 3: return { text: 'Failed', color: Colors.error, icon: 'alert-circle' as const };
+      default: return { text: 'Uploaded', color: Colors.secondary, icon: 'cloud-upload' as const };
     }
   };
 
-  const renderItem = ({ item }: { item: any }) => (
-    <TouchableOpacity 
-      style={styles.card}
-      onPress={() => router.push(`/details/${item.id}`)}
-    >
-      <View style={{ flex: 1 }}>
-        <Text style={styles.fileName} numberOfLines={1}>{item.fileName}</Text>
-        <Text style={styles.date}>{new Date(item.uploadDate).toLocaleDateString()}</Text>
-      </View>
-      <View style={[
-        styles.badge, 
-        item.status === 2 ? styles.badgeSuccess : item.status === 1 ? styles.badgeWarning : styles.badgeInfo
-      ]}>
-        <Text style={styles.badgeText}>{getStatusText(item.status)}</Text>
-      </View>
-    </TouchableOpacity>
-  );
+  const renderItem = ({ item, index }: { item: any; index: number }) => {
+    const status = getStatusInfo(item.status);
+    const isImage = item.fileName?.toLowerCase().match(/\.(jpg|jpeg|png|gif)$/);
 
-  if (isLoading) {
+    return (
+      <FadeInItem index={index}>
+        <TouchableOpacity 
+          style={styles.card}
+          onPress={() => router.push(`/details/${item.id}`)}
+          activeOpacity={0.7}
+        >
+          <View style={styles.iconContainer}>
+            <Ionicons 
+              name={isImage ? "image-outline" : "document-text-outline"} 
+              size={24} 
+              color={Colors.primary} 
+            />
+          </View>
+          <View style={styles.contentContainer}>
+            <Text style={styles.fileName} numberOfLines={1}>{item.fileName}</Text>
+            <View style={styles.metadataRow}>
+              <Text style={styles.date}>{new Date(item.uploadDate).toLocaleDateString()}</Text>
+              <View style={styles.dot} />
+              <View style={styles.statusRow}>
+                <Ionicons name={status.icon} size={14} color={status.color} style={{ marginRight: 4 }} />
+                <Text style={[styles.statusText, { color: status.color }]}>{status.text}</Text>
+              </View>
+            </View>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={Colors.border} />
+        </TouchableOpacity>
+      </FadeInItem>
+    );
+  };
+
+  if (isLoading && !documents) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#007bff" />
+        <ActivityIndicator size="large" color={Colors.primary} />
       </View>
     );
   }
 
   return (
     <View style={styles.container}>
-      <StatusBar style="auto" />
+      <StatusBar style="dark" />
       
+      <Animated.View style={[styles.welcomeSection, { opacity: headerFadeAnim, transform: [{ translateY: headerSlideAnim }] }]}>
+        <Text style={styles.welcomeTitle}>My Documents</Text>
+        <Text style={styles.welcomeSub}>Manage and analyze your intelligent documents</Text>
+      </Animated.View>
+
       <FlatList
         data={documents}
         renderItem={renderItem}
@@ -61,13 +130,22 @@ export default function HomeScreen() {
         onRefresh={refetch}
         refreshing={isLoading}
         ListEmptyComponent={
-          <Text style={styles.emptyText}>No documents yet. Tap "+" to upload.</Text>
+          <View style={styles.emptyContainer}>
+            <Ionicons name="documents-outline" size={64} color={Colors.border} />
+            <Text style={styles.emptyText}>No documents analyzed yet.</Text>
+            <TouchableOpacity 
+                style={styles.emptyButton}
+                onPress={() => router.push('/upload')}
+            >
+                <Text style={styles.emptyButtonText}>Upload Your First Document</Text>
+            </TouchableOpacity>
+          </View>
         }
       />
 
       <Link href="/upload" asChild>
-        <TouchableOpacity style={styles.fab}>
-          <Text style={styles.fabText}>+</Text>
+        <TouchableOpacity style={styles.fab} activeOpacity={0.8}>
+          <Ionicons name="add" size={30} color="#fff" />
         </TouchableOpacity>
       </Link>
     </View>
@@ -77,86 +155,126 @@ export default function HomeScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: Colors.background,
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
   },
+  welcomeSection: {
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 20,
+    backgroundColor: Colors.surface,
+  },
+  welcomeTitle: {
+    fontSize: 28,
+    fontWeight: '800',
+    color: Colors.text,
+    letterSpacing: -0.5,
+  },
+  welcomeSub: {
+    fontSize: 14,
+    color: Colors.textLight,
+    marginTop: 4,
+  },
   list: {
     padding: 16,
+    paddingBottom: 100,
   },
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: Colors.surface,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 16,
     marginBottom: 12,
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
     elevation: 2,
+  },
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: Colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 16,
+  },
+  contentContainer: {
+    flex: 1,
   },
   fileName: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#1a1a1a',
+    fontWeight: '700',
+    color: Colors.text,
     marginBottom: 4,
-    paddingRight: 8,
   },
-  date: {
-    fontSize: 14,
-    color: '#6c757d',
-  },
-  badge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    minWidth: 80,
+  metadataRow: {
+    flexDirection: 'row',
     alignItems: 'center',
   },
-  badgeSuccess: {
-    backgroundColor: '#d1e7dd',
+  date: {
+    fontSize: 13,
+    color: Colors.textLight,
   },
-  badgeWarning: {
-    backgroundColor: '#fff3cd',
+  dot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: Colors.border,
+    marginHorizontal: 8,
   },
-  badgeInfo: {
-    backgroundColor: '#cfe2ff',
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
-  badgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: '#000',
+  statusText: {
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  emptyContainer: {
+    alignItems: 'center',
+    marginTop: 80,
+    paddingHorizontal: 40,
   },
   emptyText: {
     textAlign: 'center',
-    marginTop: 40,
-    color: '#6c757d',
+    marginTop: 16,
+    fontSize: 16,
+    color: Colors.textLight,
+    marginBottom: 24,
+  },
+  emptyButton: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  emptyButtonText: {
+    color: '#fff',
+    fontWeight: '600',
   },
   fab: {
     position: 'absolute',
-    right: 24,
-    bottom: 24,
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: '#007bff',
+    right: 20,
+    bottom: 30,
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: Colors.primary,
     justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#007bff',
-    shadowOffset: { width: 0, height: 4 },
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.3,
-    shadowRadius: 6,
-    elevation: 5,
-  },
-  fabText: {
-    fontSize: 32,
-    color: '#fff',
-    lineHeight: 32,
+    shadowRadius: 12,
+    elevation: 8,
   },
 });

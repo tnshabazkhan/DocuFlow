@@ -1,25 +1,25 @@
 import { useState } from 'react';
-import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, Alert } from 'react-native';
+import { StyleSheet, Text, View, TouchableOpacity, ActivityIndicator, Alert, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import * as DocumentPicker from 'expo-document-picker';
 import * as ImagePicker from 'expo-image-picker';
 import { uploadDocument } from '../services/api';
+import { Colors } from '../constants/Colors';
+import { Ionicons } from '@expo/vector-icons';
 
 const CATEGORIES = [
-  { label: 'Smart Summary (AI)', value: 5 },
-  { label: 'Invoice / Receipt', value: 1 },
-  { label: 'Identity Card', value: 3 },
-  { label: 'Analyze Structure', value: 0 },
-  { label: 'Plain Text (OCR)', value: 4 },
+  { label: 'Smart Summary', value: 5, icon: 'sparkles-outline', desc: 'AI-generated executive summary' },
+  { label: 'Invoice / Receipt', value: 1, icon: 'receipt-outline', desc: 'Extract amounts and dates' },
+  { label: 'Identity Card', value: 3, icon: 'id-card-outline', desc: 'Verify personal information' },
+  { label: 'Plain Text', value: 4, icon: 'text-outline', desc: 'Convert image to digital text' },
 ];
 
 const UploadScreen = () => {
   const router = useRouter();
-  const [selectedCategory, setSelectedCategory] = useState(5); // Default to Smart Summary
+  const [selectedCategory, setSelectedCategory] = useState(5);
   const [file, setFile] = useState<any>(null);
   const [isUploading, setIsUploading] = useState(false);
 
-  // Use the modern hook approach if possible, or fallback to manual request
   const [permissionResponse, requestPermission] = ImagePicker.useCameraPermissions();
 
   const pickDocument = async () => {
@@ -41,7 +41,7 @@ const UploadScreen = () => {
         if (!permissionResponse?.granted) {
             const permission = await requestPermission();
             if (!permission.granted) {
-                Alert.alert('Permission needed', 'We need camera access to take photos of documents.');
+                Alert.alert('Permission needed', 'We need camera access to take photos.');
                 return;
             }
         }
@@ -68,61 +68,91 @@ const UploadScreen = () => {
     try {
       const id = await uploadDocument(file, selectedCategory);
       setIsUploading(false);
-      Alert.alert('Success', 'Document uploaded and processing started!', [
-        { text: 'View Results', onPress: () => router.replace(`/details/${id}`) },
-        { text: 'Close', onPress: () => router.back() }
+      Alert.alert('Analysis Started', 'Your document is being processed by Azure AI.', [
+        { text: 'View Live Results', onPress: () => router.replace(`/details/${id}`) },
+        { text: 'Done', onPress: () => router.back() }
       ]);
     } catch (error) {
       setIsUploading(false);
-      Alert.alert('Upload Failed', 'There was an error connecting to the DocuFlow API. Please check your network and try again.');
-      console.error(error);
+      Alert.alert('Upload Failed', 'Please check your connection and try again.');
     }
   };
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>1. Select Category</Text>
-      <View style={styles.categoryContainer}>
-        {CATEGORIES.map((cat) => (
-          <TouchableOpacity
-            key={cat.value}
-            style={[styles.categoryButton, selectedCategory === cat.value && styles.categorySelected]}
-            onPress={() => setSelectedCategory(cat.value)}
-          >
-            <Text style={[styles.categoryText, selectedCategory === cat.value && styles.categoryTextSelected]}>
-              {cat.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
-
-      <Text style={styles.label}>2. Pick File</Text>
-      <View style={styles.actionRow}>
-        <TouchableOpacity style={styles.actionButton} onPress={pickDocument}>
-          <Text style={styles.actionButtonText}>Choose File</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.actionButton} onPress={takePhoto}>
-          <Text style={styles.actionButtonText}>Take Photo</Text>
-        </TouchableOpacity>
-      </View>
-
-      {file && (
-        <View style={styles.filePreview}>
-          <Text style={styles.fileName}>Selected: {file.name || 'Photo'}</Text>
+      <ScrollView contentContainerStyle={styles.scrollContent}>
+        <Text style={styles.sectionTitle}>1. Analysis Mode</Text>
+        <View style={styles.categoryGrid}>
+            {CATEGORIES.map((cat) => (
+            <TouchableOpacity
+                key={cat.value}
+                style={[
+                    styles.categoryCard, 
+                    selectedCategory === cat.value && styles.categoryCardSelected
+                ]}
+                onPress={() => setSelectedCategory(cat.value)}
+                activeOpacity={0.7}
+            >
+                <View style={[
+                    styles.categoryIcon,
+                    selectedCategory === cat.value && styles.categoryIconSelected
+                ]}>
+                    <Ionicons 
+                        name={cat.icon as any} 
+                        size={24} 
+                        color={selectedCategory === cat.value ? '#fff' : Colors.primary} 
+                    />
+                </View>
+                <Text style={[
+                    styles.categoryLabel,
+                    selectedCategory === cat.value && styles.categoryLabelSelected
+                ]}>{cat.label}</Text>
+                <Text style={styles.categoryDesc}>{cat.desc}</Text>
+            </TouchableOpacity>
+            ))}
         </View>
-      )}
 
-      <TouchableOpacity 
-        style={[styles.uploadButton, !file && styles.uploadButtonDisabled]} 
-        onPress={handleUpload}
-        disabled={isUploading || !file}
-      >
-        {isUploading ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.uploadButtonText}>Start Intelligent Processing</Text>
+        <Text style={styles.sectionTitle}>2. Source</Text>
+        <View style={styles.sourceRow}>
+            <TouchableOpacity style={styles.sourceButton} onPress={pickDocument}>
+                <Ionicons name="document-attach-outline" size={24} color={Colors.primary} />
+                <Text style={styles.sourceButtonText}>Files</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={styles.sourceButton} onPress={takePhoto}>
+                <Ionicons name="camera-outline" size={24} color={Colors.primary} />
+                <Text style={styles.sourceButtonText}>Camera</Text>
+            </TouchableOpacity>
+        </View>
+
+        {file && (
+            <View style={styles.filePreview}>
+                <Ionicons name="checkmark-circle" size={20} color={Colors.success} style={{ marginRight: 8 }} />
+                <Text style={styles.fileName} numberOfLines={1}>
+                    Ready: {file.name || 'Captured Photo'}
+                </Text>
+                <TouchableOpacity onPress={() => setFile(null)}>
+                    <Ionicons name="close-circle" size={20} color={Colors.textLight} />
+                </TouchableOpacity>
+            </View>
         )}
-      </TouchableOpacity>
+      </ScrollView>
+
+      <View style={styles.footer}>
+        <TouchableOpacity 
+            style={[styles.uploadButton, !file && styles.uploadButtonDisabled]} 
+            onPress={handleUpload}
+            disabled={isUploading || !file}
+        >
+            {isUploading ? (
+            <ActivityIndicator color="#fff" />
+            ) : (
+            <>
+                <Text style={styles.uploadButtonText}>Run Intelligent Analysis</Text>
+                <Ionicons name="arrow-forward" size={20} color="#fff" style={{ marginLeft: 8 }} />
+            </>
+            )}
+        </TouchableOpacity>
+      </View>
     </View>
   );
 };
@@ -132,77 +162,126 @@ export default UploadScreen;
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    backgroundColor: Colors.background,
+  },
+  scrollContent: {
     padding: 20,
-    backgroundColor: '#fff',
+    paddingBottom: 100,
   },
-  label: {
+  sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: '800',
     marginBottom: 16,
-    marginTop: 20,
-    color: '#333',
+    marginTop: 10,
+    color: Colors.text,
   },
-  categoryContainer: {
+  categoryGrid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 8,
+    gap: 12,
+    marginBottom: 24,
   },
-  categoryButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 20,
+  categoryCard: {
+    width: '48%',
+    backgroundColor: Colors.surface,
+    padding: 16,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#dee2e6',
-    backgroundColor: '#f8f9fa',
+    borderColor: Colors.border,
   },
-  categorySelected: {
-    backgroundColor: '#007bff',
-    borderColor: '#007bff',
+  categoryCardSelected: {
+    borderColor: Colors.primary,
+    backgroundColor: Colors.accent,
   },
-  categoryText: {
+  categoryIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 10,
+    backgroundColor: Colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  categoryIconSelected: {
+    backgroundColor: Colors.primary,
+  },
+  categoryLabel: {
     fontSize: 14,
-    color: '#495057',
+    fontWeight: '700',
+    color: Colors.text,
+    marginBottom: 4,
   },
-  categoryTextSelected: {
-    color: '#fff',
-    fontWeight: '600',
+  categoryLabelSelected: {
+    color: Colors.primary,
   },
-  actionRow: {
+  categoryDesc: {
+    fontSize: 11,
+    color: Colors.textLight,
+    lineHeight: 14,
+  },
+  sourceRow: {
     flexDirection: 'row',
     gap: 12,
+    marginBottom: 24,
   },
-  actionButton: {
+  sourceButton: {
     flex: 1,
-    padding: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#007bff',
+    backgroundColor: Colors.surface,
+    padding: 20,
+    borderRadius: 16,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
   },
-  actionButtonText: {
-    color: '#007bff',
+  sourceButtonText: {
+    color: Colors.text,
     fontWeight: '600',
+    marginTop: 8,
   },
   filePreview: {
-    marginTop: 24,
-    padding: 12,
-    backgroundColor: '#e9ecef',
-    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: Colors.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.success,
   },
   fileName: {
-    color: '#495057',
+    flex: 1,
+    color: Colors.text,
     fontSize: 14,
+    fontWeight: '500',
+  },
+  footer: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 20,
+    paddingBottom: 40,
+    backgroundColor: Colors.surface,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
   },
   uploadButton: {
-    marginTop: 'auto',
-    marginBottom: 40,
-    backgroundColor: '#007bff',
+    backgroundColor: Colors.primary,
     padding: 18,
-    borderRadius: 14,
+    borderRadius: 16,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
   uploadButtonDisabled: {
-    backgroundColor: '#ccc',
+    backgroundColor: Colors.border,
+    shadowOpacity: 0,
+    elevation: 0,
   },
   uploadButtonText: {
     color: '#fff',

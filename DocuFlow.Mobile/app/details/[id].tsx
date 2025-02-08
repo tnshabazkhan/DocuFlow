@@ -1,15 +1,64 @@
-import { StyleSheet, Text, View, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Alert } from 'react-native';
+import { StyleSheet, Text, View, ScrollView, ActivityIndicator, RefreshControl, TouchableOpacity, Alert, Animated } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { getDocument, getDocumentContentUrl, getSummaryPdfUrl } from '../../services/api';
-import { useState } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import * as Linking from 'expo-linking';
+import { Colors } from '../../constants/Colors';
+import { Ionicons } from '@expo/vector-icons';
+
+function StaggeredSection({ children, delay = 0 }: { children: React.ReactNode, delay?: number }) {
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
+        delay,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 600,
+        delay,
+        useNativeDriver: true,
+      })
+    ]).start();
+  }, []);
+
+  return (
+    <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+      {children}
+    </Animated.View>
+  );
+}
 
 export default function DetailsScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const [refreshing, setRefreshing] = useState(false);
   const [isOpeningContent, setIsOpeningContent] = useState(false);
   const [isOpeningPdf, setIsOpeningPdf] = useState(false);
+
+  const headerScaleAnim = useRef(new Animated.Value(0.9)).current;
+  const headerFadeAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(headerFadeAnim, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(headerScaleAnim, {
+        toValue: 1,
+        useNativeDriver: true,
+        tension: 20,
+        friction: 7,
+      })
+    ]).start();
+  }, []);
 
   const { data: document, isLoading, error, refetch } = useQuery({
     queryKey: ['document', id],
@@ -59,10 +108,10 @@ export default function DetailsScreen() {
     }
   };
 
-  if (isLoading) {
+  if (isLoading && !document) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#007bff" />
+        <ActivityIndicator size="large" color={Colors.primary} />
         <Text style={styles.loadingText}>Fetching AI Insights...</Text>
       </View>
     );
@@ -71,106 +120,137 @@ export default function DetailsScreen() {
   if (error || !document) {
     return (
       <View style={styles.center}>
+        <Ionicons name="alert-circle-outline" size={48} color={Colors.error} />
         <Text style={styles.errorText}>Could not find document details.</Text>
       </View>
     );
   }
 
+  const isProcessed = document.status === 2;
+
   return (
     <ScrollView 
       style={styles.container}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      contentContainerStyle={styles.scrollContent}
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={Colors.primary} />}
     >
-      <View style={styles.header}>
-        <Text style={styles.fileName}>{document.fileName}</Text>
-        <View style={styles.statusRow}>
-          <Text style={styles.statusLabel}>Status:</Text>
-          <Text style={[
-            styles.statusValue, 
-            document.status === 2 ? styles.statusSuccess : styles.statusPending
-          ]}>
-            {document.status === 2 ? 'Processed' : document.status === 1 ? 'Processing...' : 'Uploaded'}
-          </Text>
-        </View>
-      </View>
-
-      {document.summary && (
-        <View style={styles.summarySection}>
-          <View style={styles.summaryHeader}>
-            <Text style={styles.sectionTitle}>Smart Summary</Text>
-            {document.summaryPdfUri && (
-                <TouchableOpacity 
-                    style={styles.pdfButton} 
-                    onPress={handleDownloadPdf}
-                    disabled={isOpeningPdf}
-                >
-                    {isOpeningPdf ? (
-                        <ActivityIndicator size="small" color="#fff" />
-                    ) : (
-                        <Text style={styles.pdfButtonText}>Download PDF</Text>
-                    )}
-                </TouchableOpacity>
-            )}
-          </View>
-          <Text style={styles.summaryText}>{document.summary}</Text>
-        </View>
-      )}
-
-      {document.status === 2 ? (
-        <>
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>AI Metadata</Text>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>Type:</Text>
-              <Text style={styles.infoValue}>{document.documentType || 'N/A'}</Text>
-            </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.infoLabel}>AI Confidence:</Text>
-              <Text style={styles.infoValue}>
-                {document.confidenceScore ? `${(document.confidenceScore * 100).toFixed(0)}%` : 'N/A'}
-              </Text>
-            </View>
-            {document.extractedTextUri && (
-                <View style={styles.contentRow}>
-                    <View style={{ flex: 1 }}>
-                        <Text style={styles.infoLabel}>Full Content:</Text>
-                        <Text style={[styles.infoValue, { color: '#6c757d' }]}>Stored in cloud</Text>
+      <Animated.View style={{ opacity: headerFadeAnim, transform: [{ scale: headerScaleAnim }] }}>
+        <View style={styles.headerCard}>
+            <View style={styles.headerMain}>
+                <View style={styles.headerIcon}>
+                    <Ionicons name="document-text" size={30} color={Colors.primary} />
+                </View>
+                <View style={{ flex: 1 }}>
+                    <Text style={styles.fileName}>{document.fileName}</Text>
+                    <View style={styles.statusBadgeRow}>
+                        <View style={[
+                            styles.badge, 
+                            isProcessed ? styles.badgeSuccess : styles.badgeWarning
+                        ]}>
+                            <Text style={[
+                                styles.badgeText, 
+                                { color: isProcessed ? Colors.success : Colors.warning }
+                            ]}>
+                                {isProcessed ? 'Processed' : 'Analyzing'}
+                            </Text>
+                        </View>
+                        <Text style={styles.dateText}>
+                            {new Date(document.uploadDate).toLocaleDateString()}
+                        </Text>
                     </View>
+                </View>
+            </View>
+        </View>
+      </Animated.View>
+
+      {!isProcessed ? (
+        <StaggeredSection delay={300}>
+            <View style={styles.processingCard}>
+                <ActivityIndicator size="small" color={Colors.primary} style={{ marginBottom: 16 }} />
+                <Text style={styles.processingTitle}>Intelligence in Progress</Text>
+                <Text style={styles.processingSub}>Azure AI is extracting structured data, identifying entities, and generating a summary.</Text>
+            </View>
+        </StaggeredSection>
+      ) : (
+        <>
+          {document.summary && (
+            <StaggeredSection delay={200}>
+                <View style={styles.summarySection}>
+                <View style={styles.sectionHeader}>
+                    <View style={styles.titleWithIcon}>
+                        <Ionicons name="sparkles" size={18} color={Colors.primary} style={{ marginRight: 8 }} />
+                        <Text style={styles.sectionTitle}>Smart Summary</Text>
+                    </View>
+                    {document.summaryPdfUri && (
+                        <TouchableOpacity 
+                            style={styles.pdfAction} 
+                            onPress={handleDownloadPdf}
+                            disabled={isOpeningPdf}
+                        >
+                            {isOpeningPdf ? (
+                                <ActivityIndicator size="small" color={Colors.primary} />
+                            ) : (
+                                <Ionicons name="download-outline" size={20} color={Colors.primary} />
+                            )}
+                        </TouchableOpacity>
+                    )}
+                </View>
+                <Text style={styles.summaryText}>{document.summary}</Text>
+                </View>
+            </StaggeredSection>
+          )}
+
+          <StaggeredSection delay={400}>
+            <View style={styles.detailsSection}>
+                <Text style={styles.sectionTitle}>AI Metadata</Text>
+                <View style={styles.metaGrid}>
+                    <View style={styles.metaItem}>
+                        <Text style={styles.metaLabel}>Confidence</Text>
+                        <Text style={styles.metaValue}>
+                            {document.confidenceScore ? `${(document.confidenceScore * 100).toFixed(0)}%` : 'N/A'}
+                        </Text>
+                    </View>
+                    <View style={styles.metaItem}>
+                        <Text style={styles.metaLabel}>Document Type</Text>
+                        <Text style={styles.metaValue}>{document.documentType || 'General'}</Text>
+                    </View>
+                </View>
+
+                {document.extractedTextUri && (
                     <TouchableOpacity 
-                        style={styles.viewButton} 
+                        style={styles.fullTextButton} 
                         onPress={handleViewFullContent}
                         disabled={isOpeningContent}
                     >
-                        {isOpeningContent ? (
-                            <ActivityIndicator size="small" color="#fff" />
-                        ) : (
-                            <Text style={styles.viewButtonText}>View Full Text</Text>
-                        )}
+                        <Ionicons name="eye-outline" size={20} color={Colors.primary} style={{ marginRight: 8 }} />
+                        <Text style={styles.fullTextButtonText}>
+                            {isOpeningContent ? 'Loading...' : 'View Extracted Full Text'}
+                        </Text>
                     </TouchableOpacity>
-                </View>
-            )}
-          </View>
+                )}
+            </View>
+          </StaggeredSection>
 
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Extracted Fields</Text>
-            {document.extractedData && Object.keys(document.extractedData).length > 0 ? (
-              Object.entries(document.extractedData).map(([key, value]) => (
-                <View key={key} style={styles.dataRow}>
-                  <Text style={styles.dataKey}>{key}:</Text>
-                  <Text style={styles.dataValue}>{String(value)}</Text>
+          <StaggeredSection delay={600}>
+            <View style={styles.dataSection}>
+                <Text style={styles.sectionTitle}>Extracted Fields</Text>
+                {document.extractedData && Object.keys(document.extractedData).length > 0 ? (
+                <View style={styles.dataList}>
+                    {Object.entries(document.extractedData).map(([key, value]) => (
+                        <View key={key} style={styles.dataRow}>
+                            <Text style={styles.dataKey}>{key.replace(/([A-Z])/g, ' $1').trim()}</Text>
+                            <Text style={styles.dataValue}>{String(value)}</Text>
+                        </View>
+                    ))}
                 </View>
-              ))
-            ) : (
-              <Text style={styles.emptyText}>No specific fields were extracted.</Text>
-            )}
-          </View>
+                ) : (
+                <View style={styles.emptyData}>
+                    <Text style={styles.emptyText}>No specific structured fields identified.</Text>
+                </View>
+                )}
+            </View>
+          </StaggeredSection>
         </>
-      ) : (
-        <View style={styles.processingCard}>
-          <ActivityIndicator size="small" color="#007bff" style={{ marginBottom: 12 }} />
-          <Text style={styles.processingTitle}>Analyzing Document</Text>
-          <Text style={styles.processingSub}>Azure AI is extracting structured data and generating insights. This page will update automatically.</Text>
-        </View>
       )}
     </ScrollView>
   );
@@ -179,164 +259,232 @@ export default function DetailsScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f8f9fa',
+    backgroundColor: Colors.background,
+  },
+  scrollContent: {
+    paddingBottom: 40,
   },
   center: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+    backgroundColor: Colors.background,
   },
-  header: {
+  headerCard: {
+    backgroundColor: Colors.surface,
     padding: 24,
-    backgroundColor: '#fff',
     borderBottomWidth: 1,
-    borderBottomColor: '#eee',
+    borderBottomColor: Colors.border,
   },
-  fileName: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1a1a1a',
-    marginBottom: 8,
-  },
-  statusRow: {
+  headerMain: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-  statusLabel: {
-    fontSize: 14,
-    color: '#6c757d',
-    marginRight: 8,
+  headerIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 16,
+    backgroundColor: Colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginRight: 20,
   },
-  statusValue: {
-    fontSize: 14,
-    fontWeight: '600',
+  fileName: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.text,
+    marginBottom: 6,
   },
-  statusSuccess: {
-    color: '#28a745',
+  statusBadgeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
   },
-  statusPending: {
-    color: '#ffc107',
+  badge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    borderWidth: 1,
+  },
+  badgeSuccess: {
+    backgroundColor: '#ECFDF5',
+    borderColor: '#A7F3D0',
+  },
+  badgeWarning: {
+    backgroundColor: '#FFFBEB',
+    borderColor: '#FDE68A',
+  },
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+  },
+  dateText: {
+    fontSize: 13,
+    color: Colors.textLight,
   },
   summarySection: {
     margin: 16,
     padding: 20,
-    backgroundColor: '#e7f3ff',
-    borderRadius: 16,
-    borderLeftWidth: 4,
-    borderLeftColor: '#007bff',
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.02,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  summaryHeader: {
+  sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 16,
   },
-  summaryText: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: '#333',
-  },
-  pdfButton: {
-    backgroundColor: '#007bff',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 6,
-  },
-  pdfButtonText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  section: {
-    marginTop: 16,
-    padding: 24,
-    backgroundColor: '#fff',
+  titleWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   sectionTitle: {
     fontSize: 18,
+    fontWeight: '800',
+    color: Colors.text,
+  },
+  pdfAction: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.accent,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  summaryText: {
+    fontSize: 15,
+    lineHeight: 24,
+    color: Colors.text,
+  },
+  detailsSection: {
+    margin: 16,
+    marginTop: 0,
+    padding: 20,
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  metaGrid: {
+    flexDirection: 'row',
+    marginTop: 16,
+    gap: 16,
+  },
+  metaItem: {
+    flex: 1,
+    padding: 12,
+    backgroundColor: Colors.background,
+    borderRadius: 12,
+  },
+  metaLabel: {
+    fontSize: 11,
+    color: Colors.textLight,
+    textTransform: 'uppercase',
+    fontWeight: '600',
+    marginBottom: 4,
+  },
+  metaValue: {
+    fontSize: 15,
     fontWeight: '700',
-    color: '#333',
+    color: Colors.text,
   },
-  infoRow: {
+  fullTextButton: {
+    marginTop: 20,
     flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginBottom: 8,
-  },
-  contentRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginTop: 8,
+    justifyContent: 'center',
+    padding: 14,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.primary,
   },
-  infoLabel: {
-    color: '#6c757d',
+  fullTextButtonText: {
+    color: Colors.primary,
+    fontWeight: '700',
+    fontSize: 14,
   },
-  infoValue: {
-    fontWeight: '600',
-    color: '#1a1a1a',
+  dataSection: {
+    margin: 16,
+    marginTop: 0,
   },
-  viewButton: {
-    backgroundColor: '#007bff',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    minWidth: 100,
-    alignItems: 'center',
-  },
-  viewButtonText: {
-    color: '#fff',
-    fontSize: 13,
-    fontWeight: '600',
+  dataList: {
+    marginTop: 12,
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
   },
   dataRow: {
-    paddingVertical: 12,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor: '#f1f3f5',
+    borderBottomColor: Colors.border,
   },
   dataKey: {
-    fontSize: 12,
-    color: '#6c757d',
+    fontSize: 11,
+    color: Colors.textLight,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    fontWeight: '700',
     marginBottom: 4,
   },
   dataValue: {
-    fontSize: 16,
-    color: '#1a1a1a',
+    fontSize: 15,
+    color: Colors.text,
     fontWeight: '500',
   },
-  loadingText: {
-    marginTop: 12,
-    color: '#6c757d',
-  },
-  errorText: {
-    color: '#dc3545',
-    fontSize: 16,
-  },
   processingCard: {
-    margin: 24,
-    padding: 30,
-    backgroundColor: '#fff',
-    borderRadius: 16,
+    margin: 20,
+    padding: 40,
+    backgroundColor: Colors.surface,
+    borderRadius: 24,
     alignItems: 'center',
     borderWidth: 1,
-    borderColor: '#e9ecef',
+    borderColor: Colors.border,
   },
   processingTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#333',
-    marginBottom: 8,
+    fontWeight: '800',
+    color: Colors.text,
+    marginBottom: 12,
   },
   processingSub: {
     fontSize: 14,
-    color: '#6c757d',
+    color: Colors.textLight,
     textAlign: 'center',
-    lineHeight: 20,
+    lineHeight: 22,
+  },
+  loadingText: {
+    marginTop: 16,
+    color: Colors.textLight,
+    fontWeight: '600',
+  },
+  errorText: {
+    marginTop: 12,
+    color: Colors.error,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  emptyData: {
+    marginTop: 12,
+    padding: 24,
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderStyle: 'dashed',
   },
   emptyText: {
-    color: '#6c757d',
-    fontStyle: 'italic',
+    color: Colors.textLight,
+    fontSize: 14,
   }
 });
