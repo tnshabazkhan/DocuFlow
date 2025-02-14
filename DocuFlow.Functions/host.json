@@ -10,7 +10,7 @@
     },
     "extensions": {
         "serviceBus": {
-            "maxAutoLockRenewalDuration": "00:05:00"
+            "maxAutoLockRenewalDuration": "00:15:00"
         }
     }
 }
