@@ -4,9 +4,10 @@
 
 ## 🚀 Key Features
 - **Clean Architecture:** Strictly decoupled layers (Domain, Application, Infrastructure, API, and Functions).
-- **Mobile First:** Native iOS/Android app built with **Expo SDK 54** featuring direct camera-to-cloud scanning.
+- **Professional Mobile UI:** Sleek, high-fidelity native app built with **Expo SDK 54** featuring modern typography, professional color palettes, and intuitive UX.
+- **Fluid Animations:** High-quality startup animations and staggered entrance effects for a premium feel (using React Native's `Animated` API).
 - **Dynamic AI Extraction:** Integrated with **Azure AI Document Intelligence**, supporting Invoices, Receipts, and Identity Documents.
-- **Smart Summaries:** Powered by **Azure OpenAI (GPT-4o/5-mini)** using a parallel **Map-Reduce** pattern to summarize massive 1,000+ page documents with high precision.
+- **Robust Smart Summaries:** Powered by **Azure OpenAI (GPT-4o)** using a parallel **Map-Reduce** pattern. Optimized for 1,000+ page docs with **exponential backoff** and **idempotent processing** for maximum reliability.
 - **"Stay Free" Hybrid Strategy:** Uses local C# PDF parsing for digital docs to bypass Azure AI free-tier limits.
 - **Professional Reports:** Automatically generates beautifully styled **PDF summary reports** using **QuestPDF**.
 - **Side-car Storage:** Scalable hybrid storage strategy using **Cosmos DB** for metadata and **Blob Storage** for massive OCR text files.
