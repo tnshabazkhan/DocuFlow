@@ -87,12 +87,27 @@ public class ProcessDocumentFunction
             string? extractedText = null;
             var fields = new Dictionary<string, object?>();
 
+            // Check if we already have extracted text in blob storage from a previous attempt
+            string extractedBlobName = $"extracted/{document.TenantId}/{document.Id}_content.txt";
+            if (!string.IsNullOrEmpty(document.ExtractedTextUri))
+            {
+                _logger.LogInformation("[DocuFlow] Found existing extracted text for {Id}. Loading from blob storage...", document.Id);
+                try
+                {
+                    extractedText = await _storageService.GetContentAsync(document.ExtractedTextUri, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning("[DocuFlow] Failed to load existing text: {Message}. Re-extracting.", ex.Message);
+                }
+            }
+
             bool isPdf = document.FileName.EndsWith(".pdf", StringComparison.OrdinalIgnoreCase);
             bool needsStructuredData = payload.Category == DocumentCategory.Invoice || 
                                        payload.Category == DocumentCategory.Receipt || 
                                        payload.Category == DocumentCategory.Identity;
 
-            if (isPdf && !needsStructuredData)
+            if (string.IsNullOrEmpty(extractedText) && isPdf && !needsStructuredData)
             {
                 _logger.LogInformation("[PdfPig] Attempting local text extraction for digital PDF {Id}...", document.Id);
                 try
@@ -165,9 +180,12 @@ public class ProcessDocumentFunction
 
             if (!string.IsNullOrEmpty(extractedText))
             {
-                string extractedBlobName = $"extracted/{document.TenantId}/{document.Id}_content.txt";
-                await _storageService.UploadContentAsync(extractedBlobName, extractedText, "text/plain", cancellationToken);
-                document.ExtractedTextUri = extractedBlobName;
+                // Only upload if it's not already there
+                if (string.IsNullOrEmpty(document.ExtractedTextUri))
+                {
+                    await _storageService.UploadContentAsync(extractedBlobName, extractedText, "text/plain", cancellationToken);
+                    document.ExtractedTextUri = extractedBlobName;
+                }
                 
                 fields.Add("FullContentPreview", extractedText.Length > 2000 ? extractedText.Substring(0, 2000) + "..." : extractedText);
 
@@ -194,13 +212,18 @@ public class ProcessDocumentFunction
                 document.Status = DocumentStatus.Failed;
             }
         }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("[DocuFlow] Processing for document {Id} was canceled (likely due to function timeout). Will retry.", document.Id);
+            throw; // Re-throw to allow Service Bus to redeliver or retry without marking as permanently failed
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "[DocuFlow] Error processing document {Id}", document.Id);
             document.Status = DocumentStatus.Failed;
         }
 
-        await _repository.UpdateAsync(document, cancellationToken);
+        await _repository.UpdateAsync(document, CancellationToken.None); // Use None here to ensure status update saves even if token is canceled
     }
 
     private byte[] GenerateSummaryPdf(DocuFlow.Domain.Entities.Document doc)
