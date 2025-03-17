@@ -13,4 +13,7 @@ public interface IStorageService
 
     // Download the blob stream for local processing
     Task<Stream> GetBlobStreamAsync(string blobName, CancellationToken cancellationToken);
+
+    // Download text content directly
+    Task<string> GetContentAsync(string blobName, CancellationToken cancellationToken);
 }

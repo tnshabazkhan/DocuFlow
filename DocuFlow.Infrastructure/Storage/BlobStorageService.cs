@@ -98,9 +98,20 @@ public class BlobStorageService : IStorageService
         return response.Value.Content;
     }
 
+    public async Task<string> GetContentAsync(string blobName, CancellationToken cancellationToken)
+    {
+        var blobClient = GetBlobClient(blobName);
+        var response = await blobClient.DownloadContentAsync(cancellationToken: cancellationToken);
+        return response.Value.Content.ToString();
+    }
+
     private BlobClient GetBlobClient(string blobName)
     {
-        var containerClient = _blobServiceClient.GetBlobContainerClient(_containerName);
+        string container = (blobName.StartsWith("extracted/") || blobName.StartsWith("summaries/"))
+            ? _extractedContainerName
+            : _containerName;
+
+        var containerClient = _blobServiceClient.GetBlobContainerClient(container);
         return containerClient.GetBlobClient(blobName);
     }
 }
