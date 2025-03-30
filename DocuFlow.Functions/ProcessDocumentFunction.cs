@@ -231,7 +231,7 @@ public class ProcessDocumentFunction
         
         const int chunkSize = 50000;
         var mapTasks = new List<Task<string>>();
-        using var semaphore = new SemaphoreSlim(10); // Increased to 10 for 250k TPM Global Standard models
+        using var semaphore = new SemaphoreSlim(5); // Reduced from 10 to 5 for better sustained stability on 250k TPM
 
         try
         {
@@ -244,12 +244,13 @@ public class ProcessDocumentFunction
                 mapTasks.Add(Task.Run(async () => 
                 {
                     int retryCount = 0;
+                    const int maxRetries = 6;
                     while (true)
                     {
                         await semaphore.WaitAsync(ct);
                         try
                         {
-                            _logger.LogInformation("[OpenAI] Mapping chunk {Current}/{Total}...", currentChunkIndex, totalChunks);
+                            _logger.LogInformation("[OpenAI] Mapping chunk {Current}/{Total} (Attempt: {Retry})...", currentChunkIndex, totalChunks, retryCount);
                             
                             if (!string.IsNullOrEmpty(_ollamaEndpoint) && _openAiClient == null)
                                 return "Ollama offline summary placeholder";
@@ -262,10 +263,13 @@ public class ProcessDocumentFunction
                             }, cancellationToken: ct);
                             return completion.Content[0].Text;
                         }
-                        catch (ClientResultException ex) when (ex.Message.Contains("429"))
+                        catch (ClientResultException ex) when (ex.Status == 429 || ex.Message.Contains("429") || ex.Message.Contains("too_many_requests"))
                         {
-                            if (++retryCount > 3) throw;
-                            await Task.Delay((int)Math.Pow(2, retryCount) * 2000, ct);
+                            if (++retryCount > maxRetries) throw;
+                            // Exponential backoff with jitter
+                            int delayMs = (int)Math.Pow(2, retryCount) * 2000 + new Random().Next(0, 1000);
+                            _logger.LogWarning("[OpenAI] Rate limited on chunk {Current}. Retrying in {Delay}ms... ({Retry}/{Max})", currentChunkIndex, delayMs, retryCount, maxRetries);
+                            await Task.Delay(delayMs, ct);
                         }
                         finally { semaphore.Release(); }
                     }
