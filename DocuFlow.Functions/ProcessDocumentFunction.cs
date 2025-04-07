@@ -163,18 +163,29 @@ public class ProcessDocumentFunction
                 {
                     document.Summary = await GenerateMapReduceSummaryAsync(extractedText, cancellationToken);
                     
-                    if (document.Summary != null)
+                    if (document.Summary == null)
+                    {
+                        document.Status = DocumentStatus.Failed;
+                        _logger.LogError("[DocuFlow] Summarization failed for {Id}. Not marking as Processed.", document.Id);
+                    }
+                    else
                     {
                         byte[] pdfBytes = GenerateSummaryPdf(document);
                         string summaryPdfName = $"summaries/{document.TenantId}/{document.Id}_summary.pdf";
                         await _storageService.UploadBytesAsync(summaryPdfName, pdfBytes, "application/pdf", cancellationToken);
                         document.SummaryPdfUri = summaryPdfName;
+                        
+                        document.ExtractedData = fields;
+                        document.Status = DocumentStatus.Processed;
+                        _logger.LogInformation("[DocuFlow] Processed {Id} with Summary.", document.Id);
                     }
                 }
-
-                document.ExtractedData = fields;
-                document.Status = DocumentStatus.Processed;
-                _logger.LogInformation("[DocuFlow] Processed {Id}.", document.Id);
+                else
+                {
+                    document.ExtractedData = fields;
+                    document.Status = DocumentStatus.Processed;
+                    _logger.LogInformation("[DocuFlow] Processed {Id} without Summary.", document.Id);
+                }
             }
             else document.Status = DocumentStatus.Failed;
         }
@@ -294,7 +305,7 @@ public class ProcessDocumentFunction
         catch (Exception ex)
         {
             _logger.LogError(ex, "[DocuFlow] Summarization failed.");
-            return "Error during summarization.";
+            return null;
         }
     }
 
