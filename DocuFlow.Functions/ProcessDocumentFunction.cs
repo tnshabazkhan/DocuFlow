@@ -64,7 +64,7 @@ public class ProcessDocumentFunction
         string messageBody,
         CancellationToken cancellationToken)
     {
-        _logger.LogInformation("[DocuFlow] Processing message: {message}", messageBody);
+        _logger.LogInformation("[DocuFlow] v2.1 Processing message: {message}", messageBody);
 
         var payload = JsonSerializer.Deserialize<DocumentProcessingMessage>(messageBody);
         if (payload == null) return;
@@ -242,7 +242,7 @@ public class ProcessDocumentFunction
         
         const int chunkSize = 50000;
         var mapTasks = new List<Task<string>>();
-        using var semaphore = new SemaphoreSlim(5); // Reduced from 10 to 5 for better sustained stability on 250k TPM
+        using var semaphore = new SemaphoreSlim(10); // Restored to 10 for peak performance with Global Standard models
 
         try
         {
@@ -291,16 +291,33 @@ public class ProcessDocumentFunction
             var combinedSummaries = string.Join("\n\n---\n\n", intermediateSummaries);
             if (combinedSummaries.Length > 120000) combinedSummaries = combinedSummaries.Substring(0, 120000);
 
-            _logger.LogInformation("[OpenAI] Reducing {Length} chars...", combinedSummaries.Length);
+            _logger.LogInformation("[OpenAI] Map phase complete. Reducing {Length} chars...", combinedSummaries.Length);
             
             var reduceClient = _openAiClient!.GetChatClient(_reduceModel);
-            ChatCompletion finalCompletion = await reduceClient.CompleteChatAsync(new ChatMessage[]
-            {
-                new SystemChatMessage("Synthesize these summaries into a cohesive report."),
-                new UserChatMessage(combinedSummaries)
-            }, new ChatCompletionOptions { MaxOutputTokenCount = 4096 }, cancellationToken: ct);
+            int finalRetryCount = 0;
+            const int maxFinalRetries = 3;
 
-            return finalCompletion.Content[0].Text;
+            while (true)
+            {
+                try
+                {
+                    _logger.LogInformation("[OpenAI] Sending final Reduce request (Attempt: {Retry})...", finalRetryCount);
+                    ChatCompletion finalCompletion = await reduceClient.CompleteChatAsync(new ChatMessage[]
+                    {
+                        new SystemChatMessage("Synthesize these summaries into a cohesive report."),
+                        new UserChatMessage(combinedSummaries)
+                    }, new ChatCompletionOptions { MaxOutputTokenCount = 4096 }, cancellationToken: ct);
+
+                    return finalCompletion.Content[0].Text;
+                }
+                catch (ClientResultException ex) when (ex.Status == 429 || ex.Message.Contains("429") || ex.Message.Contains("too_many_requests"))
+                {
+                    if (++finalRetryCount > maxFinalRetries) throw;
+                    int delayMs = (int)Math.Pow(2, finalRetryCount) * 2000 + new Random().Next(0, 1000);
+                    _logger.LogWarning("[OpenAI] Rate limited on final Reduce. Retrying in {Delay}ms...", delayMs);
+                    await Task.Delay(delayMs, ct);
+                }
+            }
         }
         catch (Exception ex)
         {
