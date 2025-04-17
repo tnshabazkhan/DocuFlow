@@ -242,7 +242,7 @@ public class ProcessDocumentFunction
         
         const int chunkSize = 50000;
         var mapTasks = new List<Task<string>>();
-        using var semaphore = new SemaphoreSlim(10); // Restored to 10 for peak performance with Global Standard models
+        using var semaphore = new SemaphoreSlim(5); // Restored to 10 for peak performance with Global Standard models
 
         try
         {
@@ -255,7 +255,7 @@ public class ProcessDocumentFunction
                 mapTasks.Add(Task.Run(async () => 
                 {
                     int retryCount = 0;
-                    const int maxRetries = 6;
+                    const int maxRetries = 3;
                     while (true)
                     {
                         await semaphore.WaitAsync(ct);
@@ -295,7 +295,7 @@ public class ProcessDocumentFunction
             
             var reduceClient = _openAiClient!.GetChatClient(_reduceModel);
             int finalRetryCount = 0;
-            const int maxFinalRetries = 3;
+            const int maxFinalRetries = 2;
 
             while (true)
             {
