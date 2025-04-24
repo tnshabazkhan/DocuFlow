@@ -242,7 +242,7 @@ public class ProcessDocumentFunction
         
         const int chunkSize = 50000;
         var mapTasks = new List<Task<string>>();
-        using var semaphore = new SemaphoreSlim(5); // Restored to 10 for peak performance with Global Standard models
+        using var semaphore = new SemaphoreSlim(8); // The Aggressive Sweet Spot for 250k TPM
 
         try
         {
@@ -251,11 +251,11 @@ public class ProcessDocumentFunction
                 int currentChunkIndex = (i / chunkSize) + 1;
                 int totalChunks = (int)Math.Ceiling((double)fullText.Length / chunkSize);
                 var chunk = fullText.Substring(i, Math.Min(chunkSize, fullText.Length - i));
-                
+
                 mapTasks.Add(Task.Run(async () => 
                 {
                     int retryCount = 0;
-                    const int maxRetries = 3;
+                    const int maxRetries = 6;
                     while (true)
                     {
                         await semaphore.WaitAsync(ct);
