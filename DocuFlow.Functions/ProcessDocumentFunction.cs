@@ -242,7 +242,7 @@ public class ProcessDocumentFunction
         
         const int chunkSize = 50000;
         var mapTasks = new List<Task<string>>();
-        using var semaphore = new SemaphoreSlim(8); // The Aggressive Sweet Spot for 250k TPM
+        using var semaphore = new SemaphoreSlim(5); // Rock Solid Stability for 250k TPM
 
         try
         {
