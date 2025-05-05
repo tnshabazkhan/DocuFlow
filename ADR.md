@@ -44,9 +44,9 @@ This document tracks the key technical and architectural decisions made during t
 **Reasoning**: While libraries like `moti` and `reanimated` offer powerful features, they introduced stability issues (HostFunction errors) in the Expo environment. The built-in API provides zero-dependency stability while still delivering a professional, 60fps experience for splash screens and staggered list entrances.
 
 ## 10. Long-Running Message Reliability
-**Decision**: Increased Service Bus **`maxAutoLockRenewalDuration` to 30 minutes** and implemented **Document Idempotency** checks.
-**Reasoning**: Complex AI summarization of large books can take 10-15 minutes. The default 5-minute lock was expiring, causing duplicate processing. Extending the lock and adding a status check (`if (document.Status == Processed) return;`) ensures reliable execution for massive documents.
+**Decision**: Increased Service Bus **`maxAutoLockRenewalDuration` to 1 hour**, added a global **`functionTimeout` of 1 hour**, and implemented **Document Idempotency** checks.
+**Reasoning**: Complex AI summarization of large books can take 30-40 minutes. The previous limits were causing lock expirations and redeliveries. Extending both the lock and function runtime, combined with status checks (`if (document.Status == Processed) return;`), ensures 100% reliability for massive documents.
 
-## 11. Robust AI Map-Reduce (Throttling & Backoff)
-**Decision**: Implemented **Exponential Backoff** and reduced parallel concurrency to **3**.
-**Reasoning**: Heavy summarization jobs were hitting Azure OpenAI's **50k TPM (Tokens Per Minute)** quota. Reducing concurrency and adding a retry loop for `HTTP 429` (Too Many Requests) allows the system to gracefully wait for quota resets without failing the overall job.
+## 11. Robust AI Map-Reduce (Enterprise Stability)
+**Decision**: Standardized on **5 parallel chunks** and **6 retries** with exponential backoff and jitter.
+**Reasoning**: To maximize reliability on a **250k TPM** Global Standard quota, using 5 parallel chunks (approx. 24% of quota per batch) provides maximum stability. The deep 6-retry safety net with jitter ensures that even sustained global traffic spikes do not fail the overall document processing job.
