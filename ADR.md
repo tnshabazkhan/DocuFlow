@@ -50,3 +50,10 @@ This document tracks the key technical and architectural decisions made during t
 ## 11. Robust AI Map-Reduce (Enterprise Stability)
 **Decision**: Standardized on **5 parallel chunks** and **6 retries** with exponential backoff and jitter.
 **Reasoning**: To maximize reliability on a **250k TPM** Global Standard quota, using 5 parallel chunks (approx. 24% of quota per batch) provides maximum stability. The deep 6-retry safety net with jitter ensures that even sustained global traffic spikes do not fail the overall document processing job.
+
+## 12. Hybrid GPT Model Architecture
+**Decision**: Adopt a dual-model strategy using **`gpt-4o-mini`** for the "Map" phase and **`gpt-4o`** for the "Reduce" phase.
+**Reasoning**: 
+- **Cost Efficiency**: `gpt-4o-mini` is ~95% cheaper per token. Since the Map phase (reading individual document chunks) represents the bulk of token consumption, this significantly slashes operational costs.
+- **Output Quality**: Flagship models like `gpt-4o` excel at high-level synthesis and reasoning. Using it for the final master report ensures the highest possible quality for the user-facing insights.
+- **Throughput**: `gpt-4o-mini` typically offers much higher TPM (Tokens Per Minute) quotas, enabling faster parallel processing of document chunks.
