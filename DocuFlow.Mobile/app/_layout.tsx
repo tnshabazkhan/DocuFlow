@@ -4,6 +4,7 @@ import { Colors } from '../constants/Colors';
 import { View, StyleSheet, Text, Animated } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import { Ionicons } from '@expo/vector-icons';
+import { realtimeService } from '../services/realtimeService';
 
 const queryClient = new QueryClient();
 
@@ -14,6 +15,9 @@ function StartupAnimation({ onFinish }: { onFinish: () => void }) {
   const textFadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
+    // Start SignalR background connection
+    realtimeService.start();
+
     Animated.parallel([
       Animated.spring(scaleAnim, {
         toValue: 1,

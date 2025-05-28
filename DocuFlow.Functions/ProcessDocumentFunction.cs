@@ -14,8 +14,11 @@ using System.Text;
 using QuestPDF.Fluent;
 using QuestPDF.Helpers;
 using QuestPDF.Infrastructure;
+using Microsoft.AspNetCore.SignalR;
 
 namespace DocuFlow.Functions;
+
+using Microsoft.Azure.SignalR.Management;
 
 public class ProcessDocumentFunction
 {
@@ -24,6 +27,7 @@ public class ProcessDocumentFunction
     private readonly IStorageService _storageService;
     private readonly DocumentIntelligenceClient _aiClient;
     private readonly AzureOpenAIClient? _openAiClient;
+    private readonly ServiceHubContext _hubContext;
     private readonly string _mapModel;
     private readonly string _reduceModel;
     private readonly string? _ollamaEndpoint;
@@ -32,11 +36,13 @@ public class ProcessDocumentFunction
         ILogger<ProcessDocumentFunction> logger,
         IDocumentRepository repository,
         IStorageService storageService,
+        ServiceHubContext hubContext,
         IConfiguration configuration)
     {
         _logger = logger;
         _repository = repository;
         _storageService = storageService;
+        _hubContext = hubContext;
 
         QuestPDF.Settings.License = LicenseType.Community;
 
@@ -87,6 +93,7 @@ public class ProcessDocumentFunction
         {
             document.Status = DocumentStatus.Processing;
             await _repository.UpdateAsync(document, cancellationToken);
+            await _hubContext.Clients.All.SendAsync("progressUpdate", new { documentId = document.Id, status = "Starting Processing..." }, cancellationToken);
 
             string? extractedText = null;
             var fields = new Dictionary<string, object?>();
@@ -96,6 +103,7 @@ public class ProcessDocumentFunction
             if (!string.IsNullOrEmpty(document.ExtractedTextUri))
             {
                 _logger.LogInformation("[DocuFlow] Re-using existing text for {Id}...", document.Id);
+                await _hubContext.Clients.All.SendAsync("progressUpdate", new { documentId = document.Id, status = "Loading existing text..." }, cancellationToken);
                 try { extractedText = await _storageService.GetContentAsync(document.ExtractedTextUri, cancellationToken); }
                 catch { _logger.LogWarning("[DocuFlow] Failed to load existing text."); }
             }
@@ -108,6 +116,7 @@ public class ProcessDocumentFunction
             if (string.IsNullOrEmpty(extractedText) && isPdf && !needsStructuredData)
             {
                 _logger.LogInformation("[PdfPig] Local extraction for {Id}...", document.Id);
+                await _hubContext.Clients.All.SendAsync("progressUpdate", new { documentId = document.Id, status = "Extracting text locally..." }, cancellationToken);
                 try
                 {
                     using var blobStream = await _storageService.GetBlobStreamAsync(document.BlobUri, cancellationToken);
@@ -133,6 +142,9 @@ public class ProcessDocumentFunction
                     DocumentCategory.Identity => "prebuilt-idDocument",
                     _ => "prebuilt-read"
                 };
+
+                _logger.LogInformation("[AI] Document Intelligence extraction for {Id}...", document.Id);
+                await _hubContext.Clients.All.SendAsync("progressUpdate", new { documentId = document.Id, status = "AI Document Analysis..." }, cancellationToken);
 
                 var readUri = await _storageService.GenerateReadSasUriAsync(document.BlobUri, cancellationToken);
                 var aiContent = new AnalyzeDocumentContent { UrlSource = new Uri(readUri) };
@@ -161,7 +173,8 @@ public class ProcessDocumentFunction
 
                 if (payload.Category == DocumentCategory.Summary && (_openAiClient != null || !string.IsNullOrEmpty(_ollamaEndpoint)))
                 {
-                    document.Summary = await GenerateMapReduceSummaryAsync(extractedText, cancellationToken);
+                    await _hubContext.Clients.All.SendAsync("progressUpdate", new { documentId = document.Id, status = "Summarizing with AI..." }, cancellationToken);
+                    document.Summary = await GenerateMapReduceSummaryAsync(document.Id, extractedText, cancellationToken);
                     
                     if (document.Summary == null)
                     {
@@ -170,6 +183,7 @@ public class ProcessDocumentFunction
                     }
                     else
                     {
+                        await _hubContext.Clients.All.SendAsync("progressUpdate", new { documentId = document.Id, status = "Generating PDF Report..." }, cancellationToken);
                         byte[] pdfBytes = GenerateSummaryPdf(document);
                         string summaryPdfName = $"summaries/{document.TenantId}/{document.Id}_summary.pdf";
                         await _storageService.UploadBytesAsync(summaryPdfName, pdfBytes, "application/pdf", cancellationToken);
@@ -201,6 +215,7 @@ public class ProcessDocumentFunction
         }
 
         await _repository.UpdateAsync(document, CancellationToken.None);
+        await _hubContext.Clients.All.SendAsync("progressUpdate", new { documentId = document.Id, status = document.Status.ToString() }, CancellationToken.None);
     }
 
     private byte[] GenerateSummaryPdf(DocuFlow.Domain.Entities.Document doc)
@@ -233,7 +248,7 @@ public class ProcessDocumentFunction
         }).GeneratePdf();
     }
 
-    private async Task<string?> GenerateMapReduceSummaryAsync(string fullText, CancellationToken ct)
+    private async Task<string?> GenerateMapReduceSummaryAsync(Guid documentId, string fullText, CancellationToken ct)
     {
         fullText = CleanDocumentText(fullText);
         
@@ -246,6 +261,7 @@ public class ProcessDocumentFunction
 
         try
         {
+            int completedChunks = 0;
             for (int i = 0; i < fullText.Length; i += chunkSize)
             {
                 int currentChunkIndex = (i / chunkSize) + 1;
@@ -272,7 +288,17 @@ public class ProcessDocumentFunction
                                 new SystemChatMessage("Summarize this document section concisely."),
                                 new UserChatMessage(chunk)
                             }, cancellationToken: ct);
-                            return completion.Content[0].Text;
+                            
+                            var result = completion.Content[0].Text;
+                            
+                            // Send progress update when a chunk finishes
+                            Interlocked.Increment(ref completedChunks);
+                            await _hubContext.Clients.All.SendAsync("progressUpdate", new { 
+                                documentId = documentId,
+                                status = $"Summarizing (Part {completedChunks} of {totalChunks})..." 
+                            }, ct);
+
+                            return result;
                         }
                         catch (ClientResultException ex) when (ex.Status == 429 || ex.Message.Contains("429") || ex.Message.Contains("too_many_requests"))
                         {

@@ -1,6 +1,7 @@
 using DocuFlow.Application;
 using DocuFlow.Infrastructure;
 using DocuFlow.Api.Endpoints;
+using Microsoft.Azure.SignalR.Management;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,6 +36,17 @@ builder.Services.Configure<Microsoft.AspNetCore.Http.Json.JsonOptions>(options =
 builder.Services.AddApplication();
 builder.Services.AddInfrastructure(builder.Configuration);
 
+// SignalR Service Management for Serverless Negotiation
+builder.Services.AddSingleton<ServiceHubContext>(sp =>
+{
+    var connectionString = builder.Configuration["SignalRConnection"];
+    var serviceManager = new ServiceManagerBuilder()
+        .WithOptions(o => o.ConnectionString = connectionString)
+        .BuildServiceManager();
+    
+    return serviceManager.CreateHubContextAsync("documentUpdates", default).GetAwaiter().GetResult();
+});
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
@@ -50,5 +62,6 @@ app.UseCors("AllowAll");
 
 // Map Minimal API Endpoints
 app.MapDocumentEndpoints();
+app.MapSignalREndpoints();
 
 app.Run();

@@ -2,6 +2,7 @@ import { StyleSheet, Text, View, ScrollView, ActivityIndicator, RefreshControl, 
 import { useLocalSearchParams } from 'expo-router';
 import { useQuery } from '@tanstack/react-query';
 import { getDocument, getDocumentContentUrl, getSummaryPdfUrl } from '../../services/api';
+import { realtimeService } from '../../services/realtimeService';
 import { useState, useEffect, useRef } from 'react';
 import * as Linking from 'expo-linking';
 import { Colors } from '../../constants/Colors';
@@ -40,6 +41,7 @@ export default function DetailsScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [isOpeningContent, setIsOpeningContent] = useState(false);
   const [isOpeningPdf, setIsOpeningPdf] = useState(false);
+  const [liveStatus, setLiveStatus] = useState<string | null>(null);
 
   const headerScaleAnim = useRef(new Animated.Value(0.9)).current;
   const headerFadeAnim = useRef(new Animated.Value(0)).current;
@@ -58,13 +60,27 @@ export default function DetailsScreen() {
         friction: 7,
       })
     ]).start();
-  }, []);
+
+    // Listen for SignalR updates
+    const unsubscribe = realtimeService.onUpdate((update) => {
+        if (update.documentId === id) {
+            setLiveStatus(update.status);
+            // If the status is a final state, refresh the whole document data
+            if (update.status === 'Processed' || update.status === 'Failed') {
+                refetch();
+            }
+        }
+    });
+
+    return () => unsubscribe();
+  }, [id]);
 
   const { data: document, isLoading, error, refetch } = useQuery({
     queryKey: ['document', id],
     queryFn: () => getDocument(id),
     refetchInterval: (query) => {
-      return query.state.data?.status === 1 || query.state.data?.status === 0 ? 3000 : false;
+      // Keep polling as a backup, but slower if we have SignalR
+      return query.state.data?.status === 1 || query.state.data?.status === 0 ? 5000 : false;
     }
   });
 
@@ -128,6 +144,80 @@ export default function DetailsScreen() {
 
   const isProcessed = document.status === 2;
 
+  const getStepStatus = (stepName: string) => {
+    if (isProcessed) return 'completed';
+    if (!liveStatus) return 'pending';
+
+    const status = liveStatus.toLowerCase();
+    
+    const steps = {
+        ocr: status.includes('extracting') || status.includes('analysis') || status.includes('starting'),
+        summary: status.includes('summarizing'),
+        report: status.includes('generating pdf')
+    };
+
+    if (stepName === 'ocr') {
+        if (steps.summary || steps.report) return 'completed';
+        return steps.ocr ? 'active' : 'pending';
+    }
+    if (stepName === 'summary') {
+        if (steps.report) return 'completed';
+        return steps.summary ? 'active' : 'pending';
+    }
+    if (stepName === 'report') {
+        return steps.report ? 'active' : 'pending';
+    }
+    return 'pending';
+  };
+
+  const StepItem = ({ label, status, subtext }: { label: string, status: 'completed' | 'active' | 'pending', subtext?: string }) => {
+    const pulseAnim = useRef(new Animated.Value(1)).current;
+
+    useEffect(() => {
+        if (status === 'active') {
+            const animation = Animated.loop(
+                Animated.sequence([
+                    Animated.timing(pulseAnim, { toValue: 1.2, duration: 800, useNativeDriver: true }),
+                    Animated.timing(pulseAnim, { toValue: 1, duration: 800, useNativeDriver: true }),
+                ])
+            );
+            animation.start();
+            return () => animation.stop();
+        } else {
+            pulseAnim.setValue(1);
+        }
+    }, [status]);
+
+    return (
+        <View style={styles.stepItem}>
+            <View style={styles.stepLeft}>
+                <Animated.View style={[
+                    styles.stepIconContainer,
+                    status === 'active' && { transform: [{ scale: pulseAnim }], backgroundColor: Colors.accent },
+                    status === 'completed' && { backgroundColor: Colors.success }
+                ]}>
+                    {status === 'completed' ? (
+                        <Ionicons name="checkmark" size={14} color="#fff" />
+                    ) : (
+                        <View style={[styles.stepDot, status === 'active' && { backgroundColor: Colors.primary }]} />
+                    )}
+                </Animated.View>
+                <View style={[styles.stepLine, status === 'completed' && { backgroundColor: Colors.success }]} />
+            </View>
+            <View style={styles.stepRight}>
+                <Text style={[
+                    styles.stepLabel, 
+                    status === 'active' && { color: Colors.primary, fontWeight: '800' },
+                    status === 'pending' && { color: Colors.textLight }
+                ]}>{label}</Text>
+                {status === 'active' && subtext && (
+                    <Text style={styles.stepSubtext}>{subtext}</Text>
+                )}
+            </View>
+        </View>
+    );
+  };
+
   return (
     <ScrollView 
       style={styles.container}
@@ -151,7 +241,7 @@ export default function DetailsScreen() {
                                 styles.badgeText, 
                                 { color: isProcessed ? Colors.success : Colors.warning }
                             ]}>
-                                {isProcessed ? 'Processed' : 'Analyzing'}
+                                {liveStatus || (isProcessed ? 'Processed' : 'Analyzing')}
                             </Text>
                         </View>
                         <Text style={styles.dateText}>
@@ -165,10 +255,29 @@ export default function DetailsScreen() {
 
       {!isProcessed ? (
         <StaggeredSection delay={300}>
-            <View style={styles.processingCard}>
-                <ActivityIndicator size="small" color={Colors.primary} style={{ marginBottom: 16 }} />
-                <Text style={styles.processingTitle}>Intelligence in Progress</Text>
-                <Text style={styles.processingSub}>Azure AI is extracting structured data, identifying entities, and generating a summary.</Text>
+            <View style={styles.timelineCard}>
+                <Text style={styles.timelineTitle}>AI Processing Sequence</Text>
+                
+                <StepItem 
+                    label="Extracting Knowledge" 
+                    status={getStepStatus('ocr')} 
+                    subtext="Reading text and identifying structures..."
+                />
+                <StepItem 
+                    label="Intelligent Summarization" 
+                    status={getStepStatus('summary')} 
+                    subtext={liveStatus?.includes('Summarizing') ? liveStatus : "Distilling key insights..."}
+                />
+                <StepItem 
+                    label="Finalizing PDF Insights" 
+                    status={getStepStatus('report')} 
+                    subtext="Generating your downloadable report..."
+                />
+
+                <View style={styles.timelineFooter}>
+                    <ActivityIndicator size="small" color={Colors.primary} style={{ marginRight: 10 }} />
+                    <Text style={styles.footerText}>Securely processing on Azure AI...</Text>
+                </View>
             </View>
         </StaggeredSection>
       ) : (
@@ -441,27 +550,6 @@ const styles = StyleSheet.create({
     color: Colors.text,
     fontWeight: '500',
   },
-  processingCard: {
-    margin: 20,
-    padding: 40,
-    backgroundColor: Colors.surface,
-    borderRadius: 24,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: Colors.border,
-  },
-  processingTitle: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Colors.text,
-    marginBottom: 12,
-  },
-  processingSub: {
-    fontSize: 14,
-    color: Colors.textLight,
-    textAlign: 'center',
-    lineHeight: 22,
-  },
   loadingText: {
     marginTop: 16,
     color: Colors.textLight,
@@ -486,5 +574,82 @@ const styles = StyleSheet.create({
   emptyText: {
     color: Colors.textLight,
     fontSize: 14,
+  },
+  timelineCard: {
+    margin: 16,
+    padding: 24,
+    backgroundColor: Colors.surface,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  timelineTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+    color: Colors.text,
+    marginBottom: 24,
+  },
+  stepItem: {
+    flexDirection: 'row',
+    minHeight: 60,
+  },
+  stepLeft: {
+    width: 30,
+    alignItems: 'center',
+  },
+  stepIconContainer: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: Colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1,
+  },
+  stepDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: Colors.textLight,
+  },
+  stepLine: {
+    width: 2,
+    flex: 1,
+    backgroundColor: Colors.border,
+    marginVertical: 4,
+  },
+  stepRight: {
+    flex: 1,
+    paddingLeft: 16,
+    paddingBottom: 20,
+  },
+  stepLabel: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: Colors.text,
+  },
+  stepSubtext: {
+    fontSize: 13,
+    color: Colors.textLight,
+    marginTop: 4,
+    lineHeight: 18,
+  },
+  timelineFooter: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+  },
+  footerText: {
+    fontSize: 12,
+    color: Colors.textLight,
+    fontStyle: 'italic',
   }
 });
