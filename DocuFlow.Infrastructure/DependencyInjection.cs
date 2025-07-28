@@ -1,7 +1,9 @@
 using DocuFlow.Application.Interfaces;
+using DocuFlow.Infrastructure.Authentication;
 using DocuFlow.Infrastructure.Messaging;
 using DocuFlow.Infrastructure.Persistence;
 using DocuFlow.Infrastructure.Storage;
+using Microsoft.Azure.Cosmos;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 
@@ -11,15 +13,19 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        // Use Cosmos DB for shared state between API and Functions
         var cosmosConn = configuration.GetConnectionString("CosmosDb");
-        if (!string.IsNullOrEmpty(cosmosConn) && !cosmosConn.Contains("fake"))
+        bool useRealCosmos = !string.IsNullOrEmpty(cosmosConn) && !cosmosConn.Contains("fake");
+
+        if (useRealCosmos)
         {
+            services.AddSingleton(sp => new CosmosClient(cosmosConn));
             services.AddSingleton<IDocumentRepository, CosmosDocumentRepository>();
+            services.AddSingleton<IUserRepository, CosmosUserRepository>();
         }
         else
         {
             services.AddSingleton<IDocumentRepository, InMemoryDocumentRepository>();
+            services.AddSingleton<IUserRepository, InMemoryUserRepository>();
         }
         
         // Register the Blob Storage Service
@@ -35,6 +41,9 @@ public static class DependencyInjection
         {
             services.AddScoped<IMessageBus, DevMessageBus>();
         }
+
+        // Identity and Auth
+        services.AddScoped<IJwtService, JwtService>();
 
         return services;
     }

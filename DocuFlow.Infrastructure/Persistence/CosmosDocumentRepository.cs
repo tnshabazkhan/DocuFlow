@@ -10,13 +10,11 @@ public class CosmosDocumentRepository : IDocumentRepository
 {
     private readonly Container _container;
 
-    public CosmosDocumentRepository(IConfiguration configuration)
+    public CosmosDocumentRepository(IConfiguration configuration, CosmosClient client)
     {
-        var connectionString = configuration.GetConnectionString("CosmosDb");
         var databaseName = configuration["CosmosDb:DatabaseName"] ?? "DocuFlowDb";
         var containerName = configuration["CosmosDb:ContainerName"] ?? "Documents";
 
-        var client = new CosmosClient(connectionString);
         _container = client.GetContainer(databaseName, containerName);
     }
 

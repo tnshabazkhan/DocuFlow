@@ -1,11 +1,13 @@
-import { StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator, Animated } from 'react-native';
+import { StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator, Animated, Alert } from 'react-native';
 import { Link, useRouter } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useQuery } from '@tanstack/react-query';
 import { getDocuments } from '../services/api';
 import { Colors } from '../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import * as SecureStore from 'expo-secure-store';
+import authService from '../services/authService';
 
 function FadeInItem({ children, index }: { children: React.ReactNode, index: number }) {
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -13,11 +15,11 @@ function FadeInItem({ children, index }: { children: React.ReactNode, index: num
 
   useEffect(() => {
     Animated.parallel([
-      Animated.timing(fadeAnim, {
+      Animated.spring(fadeAnim, {
         toValue: 1,
-        duration: 500,
-        delay: index * 100,
         useNativeDriver: true,
+        tension: 10,
+        friction: 4,
       }),
       Animated.timing(slideAnim, {
         toValue: 0,
@@ -55,11 +57,41 @@ export default function HomeScreen() {
     ]).start();
   }, []);
 
+  const [hasToken, setHasToken] = useState(false);
+
+  useEffect(() => {
+    async function checkToken() {
+      const token = await SecureStore.getItemAsync('user_token');
+      setHasToken(!!token);
+    }
+    checkToken();
+  }, []);
+
   const { data: documents, isLoading, error, refetch } = useQuery({
     queryKey: ['documents'],
     queryFn: getDocuments,
+    enabled: hasToken,
     refetchInterval: 10000,
   });
+
+  const handleLogout = async () => {
+    Alert.alert(
+      "Logout",
+      "Are you sure you want to logout?",
+      [
+        { text: "Cancel", style: "cancel" },
+        { 
+          text: "Logout", 
+          style: "destructive",
+          onPress: async () => {
+            await authService.logout();
+            // This will trigger the _layout.tsx check and redirect to login
+            router.replace('/login');
+          }
+        }
+      ]
+    );
+  };
 
   const getStatusInfo = (status: number) => {
     switch (status) {
@@ -118,8 +150,15 @@ export default function HomeScreen() {
       <StatusBar style="dark" />
       
       <Animated.View style={[styles.welcomeSection, { opacity: headerFadeAnim, transform: [{ translateY: headerSlideAnim }] }]}>
-        <Text style={styles.welcomeTitle}>My Documents</Text>
-        <Text style={styles.welcomeSub}>Manage and analyze your intelligent documents</Text>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <View style={{ flex: 1 }}>
+                <Text style={styles.welcomeTitle}>My Documents</Text>
+                <Text style={styles.welcomeSub}>Manage and analyze your intelligent documents</Text>
+            </View>
+            <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+                <Ionicons name="log-out-outline" size={24} color={Colors.error} />
+            </TouchableOpacity>
+        </View>
       </Animated.View>
 
       <FlatList
@@ -178,6 +217,10 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: Colors.textLight,
     marginTop: 4,
+  },
+  logoutButton: {
+    padding: 8,
+    marginLeft: 8,
   },
   list: {
     padding: 16,

@@ -2,12 +2,40 @@ using DocuFlow.Application;
 using DocuFlow.Infrastructure;
 using DocuFlow.Api.Endpoints;
 using Microsoft.Azure.SignalR.Management;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.IdentityModel.Tokens;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// Configure JWT Authentication
+var jwtSettings = builder.Configuration.GetSection("JwtSettings");
+var secretKey = jwtSettings["SecretKey"] ?? "a_very_long_and_secure_secret_key_for_development_purposes";
+
+builder.Services.AddAuthentication(options =>
+{
+    options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
+    options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
+})
+.AddJwtBearer(options =>
+{
+    options.TokenValidationParameters = new TokenValidationParameters
+    {
+        ValidateIssuer = true,
+        ValidateAudience = true,
+        ValidateLifetime = true,
+        ValidateIssuerSigningKey = true,
+        ValidIssuer = jwtSettings["Issuer"] ?? "DocuFlow",
+        ValidAudience = jwtSettings["Audience"] ?? "DocuFlow-Mobile",
+        IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey))
+    };
+});
+
+builder.Services.AddAuthorization();
 
 // Enable CORS
 builder.Services.AddCors(options =>
@@ -60,8 +88,12 @@ app.UseHttpsRedirection();
 
 app.UseCors("AllowAll");
 
+app.UseAuthentication();
+app.UseAuthorization();
+
 // Map Minimal API Endpoints
 app.MapDocumentEndpoints();
 app.MapSignalREndpoints();
+app.MapIdentityEndpoints();
 
 app.Run();

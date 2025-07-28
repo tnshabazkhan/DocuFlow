@@ -1,10 +1,11 @@
-import { Stack } from 'expo-router';
+import { Stack, useRouter, useSegments } from 'expo-router';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Colors } from '../constants/Colors';
 import { View, StyleSheet, Text, Animated } from 'react-native';
 import { useState, useEffect, useRef } from 'react';
 import { Ionicons } from '@expo/vector-icons';
 import { realtimeService } from '../services/realtimeService';
+import { authService } from '../services/authService';
 
 const queryClient = new QueryClient();
 
@@ -68,7 +69,34 @@ function StartupAnimation({ onFinish }: { onFinish: () => void }) {
 
 export default function RootLayout() {
   const [isAppReady, setIsAppReady] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
   const appFadeAnim = useRef(new Animated.Value(0)).current;
+  const router = useRouter();
+  const segments = useSegments();
+
+  useEffect(() => {
+    async function checkAuth() {
+      const token = await authService.getStoredToken();
+      console.log('[Auth] Token check:', !!token);
+      setIsAuthenticated(!!token);
+    }
+    checkAuth();
+  }, []);
+
+  useEffect(() => {
+    console.log('[Auth] State:', { isAuthenticated, isAppReady, segment: segments[0] });
+    if (isAuthenticated === null || !isAppReady) return;
+
+    const inAuthGroup = segments[0] === 'login' || segments[0] === 'register';
+
+    if (!isAuthenticated && !inAuthGroup) {
+      console.log('[Auth] Redirecting to /login');
+      router.replace('/login');
+    } else if (isAuthenticated && inAuthGroup) {
+      console.log('[Auth] Redirecting to /');
+      router.replace('/');
+    }
+  }, [isAuthenticated, segments, isAppReady]);
 
   useEffect(() => {
     if (isAppReady) {
@@ -104,6 +132,20 @@ export default function RootLayout() {
               name="index" 
               options={{ 
                 title: 'DocuFlow',
+              }} 
+            />
+            <Stack.Screen 
+              name="login" 
+              options={{ 
+                title: 'Login',
+                headerShown: false,
+              }} 
+            />
+            <Stack.Screen 
+              name="register" 
+              options={{ 
+                title: 'Register',
+                headerShown: false,
               }} 
             />
             <Stack.Screen 
