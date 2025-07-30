@@ -1,11 +1,11 @@
 import { StyleSheet, Text, View, FlatList, TouchableOpacity, ActivityIndicator, Animated, Alert } from 'react-native';
-import { Link, useRouter } from 'expo-router';
+import { Link, useRouter, useNavigation } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useQuery } from '@tanstack/react-query';
 import { getDocuments } from '../services/api';
 import { Colors } from '../constants/Colors';
 import { Ionicons } from '@expo/vector-icons';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useLayoutEffect } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import authService from '../services/authService';
 
@@ -39,6 +39,7 @@ function FadeInItem({ children, index }: { children: React.ReactNode, index: num
 
 export default function HomeScreen() {
   const router = useRouter();
+  const navigation = useNavigation();
   const headerFadeAnim = useRef(new Animated.Value(0)).current;
   const headerSlideAnim = useRef(new Animated.Value(-20)).current;
 
@@ -92,6 +93,16 @@ export default function HomeScreen() {
       ]
     );
   };
+
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerRight: () => (
+        <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
+          <Ionicons name="log-out-outline" size={24} color={Colors.error} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation]);
 
   const getStatusInfo = (status: number) => {
     switch (status) {
@@ -155,9 +166,6 @@ export default function HomeScreen() {
                 <Text style={styles.welcomeTitle}>My Documents</Text>
                 <Text style={styles.welcomeSub}>Manage and analyze your intelligent documents</Text>
             </View>
-            <TouchableOpacity onPress={handleLogout} style={styles.logoutButton}>
-                <Ionicons name="log-out-outline" size={24} color={Colors.error} />
-            </TouchableOpacity>
         </View>
       </Animated.View>
 
