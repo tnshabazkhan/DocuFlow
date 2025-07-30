@@ -4,6 +4,7 @@ using DocuFlow.Domain.Entities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Azure.Cosmos.Linq;
 using Newtonsoft.Json;
+using User = DocuFlow.Domain.Entities.User;
 
 namespace DocuFlow.Infrastructure.Persistence;
 
@@ -20,7 +21,7 @@ public class CosmosUserRepository : IUserRepository
 
     public async Task<User?> GetByEmailAsync(string email)
     {
-        var queryable = _container.GetItemLinqQueryable<User>();
+        var queryable = _container.GetItemLinqQueryable<UserDto>();
         var iterator = queryable
             .Where(u => u.Email == email)
             .ToFeedIterator();
@@ -28,7 +29,8 @@ public class CosmosUserRepository : IUserRepository
         if (iterator.HasMoreResults)
         {
             var response = await iterator.ReadNextAsync();
-            return response.FirstOrDefault();
+            var dto = response.FirstOrDefault();
+            return dto != null ? MapToEntity(dto) : null;
         }
 
         return null;
@@ -54,7 +56,7 @@ public class CosmosUserRepository : IUserRepository
     public async Task CreateAsync(User user)
     {
         var dto = MapToDto(user);
-        await _container.CreateItemAsync(dto, new PartitionKey(dto.Id));
+        await _container.CreateItemAsync(dto, new PartitionKey(dto.id));
     }
 
     // Cosmos DB requires a string 'id' property. Mapping to DTO to keep Domain clean.
