@@ -13,58 +13,80 @@ public static class IdentityEndpoints
         group.MapPost("/register", async (
             [FromBody] RegisterUserRequest request,
             IUserRepository repository,
-            IJwtService jwtService) =>
+            IJwtService jwtService,
+            ILoggerFactory loggerFactory) =>
         {
-            var existingUser = await repository.GetByEmailAsync(request.Email);
-            if (existingUser != null)
+            var logger = loggerFactory.CreateLogger("IdentityEndpoints");
+            try
             {
-                return Results.BadRequest(new { error = "User already exists" });
+                var existingUser = await repository.GetByEmailAsync(request.Email);
+                if (existingUser != null)
+                {
+                    return Results.BadRequest(new { error = "User already exists" });
+                }
+
+                var user = new User
+                {
+                    Id = Guid.NewGuid(),
+                    Email = request.Email,
+                    PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
+                    FirstName = request.FirstName,
+                    LastName = request.LastName,
+                    TenantId = Guid.NewGuid().ToString().Substring(0, 8) // Generate a unique tenantId for this user
+                };
+
+                await repository.CreateAsync(user);
+
+                var token = jwtService.GenerateToken(user);
+
+                return Results.Ok(new AuthResponse(
+                    user.Id, 
+                    user.Email, 
+                    user.FirstName, 
+                    user.LastName, 
+                    user.TenantId, 
+                    token));
             }
-
-            var user = new User
+            catch (Exception ex)
             {
-                Id = Guid.NewGuid(),
-                Email = request.Email,
-                PasswordHash = BCrypt.Net.BCrypt.HashPassword(request.Password),
-                FirstName = request.FirstName,
-                LastName = request.LastName,
-                TenantId = Guid.NewGuid().ToString().Substring(0, 8) // Generate a unique tenantId for this user
-            };
-
-            await repository.CreateAsync(user);
-
-            var token = jwtService.GenerateToken(user);
-
-            return Results.Ok(new AuthResponse(
-                user.Id, 
-                user.Email, 
-                user.FirstName, 
-                user.LastName, 
-                user.TenantId, 
-                token));
+                logger.LogError(ex, "Error during registration for {Email}", request.Email);
+                return Results.InternalServerError(new { error = ex.Message });
+            }
         })
         .WithName("RegisterUser");
 
         group.MapPost("/login", async (
             [FromBody] LoginUserRequest request,
             IUserRepository repository,
-            IJwtService jwtService) =>
+            IJwtService jwtService,
+            ILoggerFactory loggerFactory) =>
         {
-            var user = await repository.GetByEmailAsync(request.Email);
-            if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+            var logger = loggerFactory.CreateLogger("IdentityEndpoints");
+            try
             {
-                return Results.Unauthorized();
+                logger.LogInformation("Login attempt for {Email}", request.Email);
+                var user = await repository.GetByEmailAsync(request.Email);
+                if (user == null || !BCrypt.Net.BCrypt.Verify(request.Password, user.PasswordHash))
+                {
+                    logger.LogWarning("Invalid login attempt for {Email}", request.Email);
+                    return Results.Unauthorized();
+                }
+
+                var token = jwtService.GenerateToken(user);
+
+                return Results.Ok(new AuthResponse(
+                    user.Id, 
+                    user.Email, 
+                    user.FirstName, 
+                    user.LastName, 
+                    user.TenantId, 
+                    token));
             }
-
-            var token = jwtService.GenerateToken(user);
-
-            return Results.Ok(new AuthResponse(
-                user.Id, 
-                user.Email, 
-                user.FirstName, 
-                user.LastName, 
-                user.TenantId, 
-                token));
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error during login for {Email}", request.Email);
+                return Results.InternalServerError(new { error = ex.Message });
+            }
         })
         .WithName("LoginUser");
     }

@@ -74,17 +74,21 @@ export default function RootLayout() {
   const router = useRouter();
   const segments = useSegments();
 
+  // Re-check auth whenever segments change to handle login/logout redirection correctly
   useEffect(() => {
     async function checkAuth() {
       const token = await authService.getStoredToken();
-      console.log('[Auth] Token check:', !!token);
-      setIsAuthenticated(!!token);
+      const authenticated = !!token;
+      
+      if (isAuthenticated !== authenticated) {
+        console.log('[Auth] Token check:', authenticated);
+        setIsAuthenticated(authenticated);
+      }
     }
     checkAuth();
-  }, []);
+  }, [segments]);
 
   useEffect(() => {
-    console.log('[Auth] State:', { isAuthenticated, isAppReady, segment: segments[0] });
     if (isAuthenticated === null || !isAppReady) return;
 
     const inAuthGroup = segments[0] === 'login' || segments[0] === 'register';
