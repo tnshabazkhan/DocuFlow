@@ -13,20 +13,12 @@ public static class DependencyInjection
 {
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
-        var cosmosConn = configuration.GetConnectionString("CosmosDb");
-        bool useRealCosmos = !string.IsNullOrEmpty(cosmosConn) && !cosmosConn.Contains("fake");
+        var cosmosConn = configuration.GetConnectionString("CosmosDb") 
+            ?? throw new InvalidOperationException("Cosmos DB connection string is missing.");
 
-        if (useRealCosmos)
-        {
-            services.AddSingleton(sp => new CosmosClient(cosmosConn));
-            services.AddSingleton<IDocumentRepository, CosmosDocumentRepository>();
-            services.AddSingleton<IUserRepository, CosmosUserRepository>();
-        }
-        else
-        {
-            services.AddSingleton<IDocumentRepository, InMemoryDocumentRepository>();
-            services.AddSingleton<IUserRepository, InMemoryUserRepository>();
-        }
+        services.AddSingleton(sp => new CosmosClient(cosmosConn));
+        services.AddSingleton<IDocumentRepository, CosmosDocumentRepository>();
+        services.AddSingleton<IUserRepository, CosmosUserRepository>();
         
         // Register the Blob Storage Service
         services.AddScoped<IStorageService, BlobStorageService>();
