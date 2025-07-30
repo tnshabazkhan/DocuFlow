@@ -1,4 +1,4 @@
-const BASE_URL = 'http://192.168.0.6:5009';
+const BASE_URL = 'http://172.20.10.12:5009';
 
 export const Config = {
   BASE_URL,
