@@ -44,8 +44,8 @@ This document tracks the key technical and architectural decisions made during t
 **Reasoning**: While libraries like `moti` and `reanimated` offer powerful features, they introduced stability issues (HostFunction errors) in the Expo environment. The built-in API provides zero-dependency stability while still delivering a professional, 60fps experience for splash screens and staggered list entrances.
 
 ## 10. Long-Running Message Reliability
-**Decision**: Increased Service Bus **`maxAutoLockRenewalDuration` to 15 minutes**, added a global **`functionTimeout` of 15 minutes**, and implemented **Document Idempotency** checks.
-**Reasoning**: Complex AI summarization of large books takes roughly 3-10 minutes. Setting a 15-minute window provides a safe buffer while ensuring that if a process truly hangs, the message is released and retried promptly. Combined with status checks (`if (document.Status == Processed) return;`), this ensures 100% reliability for massive documents.
+**Decision**: Set Service Bus **`maxAutoLockRenewalDuration` to 10 minutes**, set global **`functionTimeout` to 10 minutes** (down from 15 minutes to align with the Azure Functions Free/Consumption Plan limit), and implemented **Document Idempotency** checks.
+**Reasoning**: Complex AI summarization of large books takes roughly 3-10 minutes. Setting a 10-minute window (the maximum allowed by Azure Functions Consumption Plan) provides a safe buffer while ensuring that if a process truly hangs, the message is released and retried promptly. Combined with status checks (`if (document.Status == Processed) return;`), this ensures reliability for massive documents while operating within the Free Tier limits.
 
 ## 11. Robust AI Map-Reduce (Enterprise Stability)
 **Decision**: Standardized on **5 parallel chunks** and **6 retries** with exponential backoff and jitter.
