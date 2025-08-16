@@ -1,4 +1,4 @@
-const BASE_URL = 'http://172.20.10.12:5009';
+const BASE_URL = 'https://docuflowapi-cph4d3bsdmbaaph3.westus3-01.azurewebsites.net/';
 
 export const Config = {
   BASE_URL,

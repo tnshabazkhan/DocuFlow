@@ -1,6 +1,7 @@
 import * as signalR from '@microsoft/signalr';
+import { Config } from '../constants/Config';
 
-const BASE_URL = 'http://172.20.10.12:5009'; // Matching your api.ts
+const BASE_URL = Config.BASE_URL; // Matching your api.ts
 
 class RealtimeService {
   private connection: signalR.HubConnection | null = null;
