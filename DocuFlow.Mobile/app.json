@@ -8,9 +8,11 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.tnshabazkhan.docuflow"
     },
     "android": {
+      "package": "com.tnshabazkhan.docuflow",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
@@ -26,6 +28,13 @@
       "expo-router",
       "expo-asset",
       "expo-secure-store"
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "7f7ac830-7b2a-4835-a8a7-3ee97bec4f93"
+      }
+    },
+    "owner": "tnshabazkhan"
   }
 }
