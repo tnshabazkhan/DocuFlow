@@ -14,7 +14,7 @@
 - **Side-car Storage:** Scalable hybrid storage strategy using **Cosmos DB** for metadata and **Blob Storage** for massive OCR text files.
 
 ## 🛠️ Tech Stack
-- **Backend:** .NET 8 / ASP.NET Core Minimal APIs
+- **Backend:** .NET 10 / ASP.NET Core Minimal APIs
 - **Mobile:** React Native / Expo SDK 54 / Expo Router / React Query
 - **Background Worker:** Azure Functions (Isolated Worker Model)
 - **Messaging:** Azure Service Bus (Async Job Queue)
