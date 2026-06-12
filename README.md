@@ -2,6 +2,13 @@
 
 **DocuFlow** is a modern, distributed document processing platform built on **.NET Clean Architecture**. It leverages Azure's AI capabilities to automatically extract, categorize, and analyze data from various document types—from mobile-captured photos to 1,000-page medical manuals.
 
+<p align="center">
+  <img src="https://github.com/user-attachments/assets/e7aaca0a-d055-4524-853f-ca854d4564e2" width="180" alt="Home Screen" style="margin: 5px;" />
+  <img src="https://github.com/user-attachments/assets/c11ff690-4aa5-46f6-a017-a39f72c4b3f4" width="180" alt="Document Details" style="margin: 5px;" />
+  <img src="https://github.com/user-attachments/assets/a27029c6-5654-45e1-b479-f00ebd4cd02b" width="180" alt="Analytics" style="margin: 5px;" />
+  <img src="https://github.com/user-attachments/assets/e787371e-ed7b-4f93-8be8-3ec101d87b04" width="180" alt="Upload" style="margin: 5px;" />
+</p>
+
 ## 🚀 Key Features
 - **Clean Architecture:** Strictly decoupled layers (Domain, Application, Infrastructure, API, and Functions).
 - **Professional Mobile UI:** Sleek, high-fidelity native app built with **Expo SDK 54** featuring modern typography, professional color palettes, and intuitive UX.
