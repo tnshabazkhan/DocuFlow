@@ -1,4 +1,4 @@
-[![License](https://shields.io)](LICENSE)
+[![License: MIT](https://shields.io)](LICENSE)
 
 # DocuFlow: AI-Powered Document Management System
 
