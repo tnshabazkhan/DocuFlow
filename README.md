@@ -1,4 +1,4 @@
-[![License: MIT](https://shields.io)](LICENSE)
+[![License: MIT](https://img.shields.io/github/license/<tnshabazkhan>/<DocuFlow>)](https://github.com/<tnshabazkhan>/<DocuFlow>/blob/main/LICENSE)
 
 # DocuFlow: AI-Powered Document Management System
 
