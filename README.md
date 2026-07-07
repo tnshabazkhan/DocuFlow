@@ -1,3 +1,5 @@
+[![License](https://shields.io)](LICENSE)
+
 # DocuFlow: AI-Powered Document Management System
 
 **DocuFlow** is a modern, distributed document processing platform built on **.NET Clean Architecture**. It leverages Azure's AI capabilities to automatically extract, categorize, and analyze data from various document types—from mobile-captured photos to 1,000-page medical manuals.
